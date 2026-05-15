@@ -249,3 +249,30 @@ body {
     opacity: 0;
   }
 }
+
+/* ----- Mobile responsive utilities ----- */
+
+/* Dynamic viewport height — accounts for mobile browser chrome */
+@supports (height: 100dvh) {
+  .h-screen-dvh { height: 100dvh; }
+  .min-h-screen-dvh { min-height: 100dvh; }
+}
+@supports not (height: 100dvh) {
+  .h-screen-dvh { height: 100vh; }
+  .min-h-screen-dvh { min-height: 100vh; }
+}
+
+/* Bottom sheet enter animation */
+@keyframes sheet-enter {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.sheet-overlay > div:last-child {
+  animation: sheet-enter 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-overlay > div:last-child {
+    animation: none;
+  }
+}

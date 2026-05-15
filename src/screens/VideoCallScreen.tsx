@@ -13,8 +13,11 @@ import Modal from "@/components/common/Modal";
 import Button from "@/components/common/Button";
 import MeetingAuthHeader from "@/components/MeetingAuthHeader";
 import TranscriptSidePanel from "@/components/TranscriptSidePanel";
+import MobileTopBar from "@/components/MobileTopBar";
+import BottomSheet from "@/components/common/BottomSheet";
 import { useAgora } from "@/hooks/useAgora";
 import { useConversationalAI } from "@/hooks/useConversationalAI";
+import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import type { IAgoraRTCRemoteUser, IRemoteVideoTrack } from "agora-rtc-sdk-ng";
 import {
   MdWbSunny,
@@ -103,6 +106,7 @@ const VideoCallScreen: React.FC = () => {
     pendingUnmuteRequest,
     callActive,
     isAgentActive,
+    isAgentLoading,
     agentState,
     agentRtcUid,
     agentAvatarRtcUid,
@@ -120,6 +124,10 @@ const VideoCallScreen: React.FC = () => {
 
   const [remainingMs, setRemainingMs] = useState<number>(SESSION_DURATION_MS);
   const [isParticipantPanelOpen, setIsParticipantPanelOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
+  const [isTranscriptSheetOpen, setIsTranscriptSheetOpen] = useState(false);
+  const [isParticipantSheetOpen, setIsParticipantSheetOpen] = useState(false);
 
   useEffect(() => {
     if (!callActive) {
@@ -216,8 +224,21 @@ const VideoCallScreen: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-300">
-      {/* Top Bar: meeting left, hackathon label centered, actions right */}
+    <div className="flex flex-col h-screen-dvh bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-300">
+      {/* Top Bar: mobile gets compact bar; desktop/tablet get full 3-col header */}
+      {isMobile ? (
+        <MobileTopBar
+          meetingName={meetingName}
+          channelId={channelId}
+          remainingLabel={
+            sessionStartTime != null ? formatRemaining(remainingMs) : null
+          }
+          isAgentActive={isAgentActive}
+          transcriptionMode={transcriptionMode}
+          onStartTour={tour.startTour}
+          onOpenTranscript={() => setIsTranscriptSheetOpen(true)}
+        />
+      ) : (
       <div className="grid grid-cols-3 items-center gap-3 bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white p-4 text-lg shadow-md transition-colors duration-300">
         <div className="min-w-0 flex justify-start">
           <span
@@ -289,14 +310,19 @@ const VideoCallScreen: React.FC = () => {
           </button>
         </div>
       </div>
+      )}
 
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left sidebar: default = Live Transcript; optional = Participants (toggle from control bar) */}
-        {!useSidebarLayout && (
+        {/* Left sidebar: hidden on mobile (uses sheets). Tablet: 280px. Desktop: 350px. */}
+        {!useSidebarLayout && !isMobile && (
           <div
             className="shrink-0 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 overflow-hidden hidden sm:flex flex-col shadow-inner transition-colors duration-300"
-            style={{ width: 350, minWidth: 350, maxWidth: 350 }}
+            style={{
+              width: isTablet ? 280 : 350,
+              minWidth: isTablet ? 280 : 350,
+              maxWidth: isTablet ? 280 : 350,
+            }}
           >
             {isParticipantPanelOpen ? (
               <>
@@ -445,6 +471,42 @@ const VideoCallScreen: React.FC = () => {
                   );
                 });
 
+                // Agent connecting placeholder — shown between Start Agent click and agent join
+                if (isAgentLoading && !isAgentActive) {
+                  allTiles.push(
+                    <div
+                      key="agent-connecting"
+                      className="relative w-full h-full rounded-lg overflow-hidden bg-gradient-to-br from-[var(--agora-accent-blue)]/20 to-gray-800/60 dark:from-[var(--agora-accent-blue)]/30 dark:to-gray-900 border border-[var(--agora-accent-blue)]/40 flex flex-col items-center justify-center gap-3"
+                      role="status"
+                      aria-live="polite"
+                      aria-label="AI agent is connecting"
+                    >
+                      <span
+                        aria-hidden
+                        className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent animate-skeleton-shimmer"
+                      />
+                      <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-[var(--agora-accent-blue)]/20 ring-2 ring-[var(--agora-accent-blue)]/40">
+                        <span className="absolute inset-0 rounded-full bg-[var(--agora-accent-blue)]/30 animate-ping" />
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="w-8 h-8 text-[var(--agora-accent-blue)] animate-pulse"
+                        >
+                          <path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7h1a1 1 0 011 1v3a1 1 0 01-1 1h-1v1a2 2 0 01-2 2H5a2 2 0 01-2-2v-1H2a1 1 0 01-1-1v-3a1 1 0 011-1h1a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2zm-3 9a1 1 0 00-1 1v2a1 1 0 002 0v-2a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v2a1 1 0 002 0v-2a1 1 0 00-1-1z" />
+                        </svg>
+                      </div>
+                      <div className="relative text-center">
+                        <div className="text-sm font-semibold text-white">
+                          {agentSettings?.name || "AI Agent"}
+                        </div>
+                        <div className="text-xs text-gray-200 mt-0.5">
+                          Connecting…
+                        </div>
+                      </div>
+                    </div>,
+                  );
+                }
+
                 // Agent: separate render paths — dedicated avatar video tile vs normal/waiting AgentTile
                 if (isAgentActive && agentRtcUid) {
                   if (agentAvatarRtcUid && hookAvatarVideoTrack) {
@@ -476,7 +538,18 @@ const VideoCallScreen: React.FC = () => {
                 let gridClass = "";
                 let itemClass = "";
 
-                if (count === 1) {
+                if (isMobile) {
+                  if (count === 1) {
+                    gridClass = "flex justify-center items-center w-full h-full";
+                    itemClass = "w-full max-w-md aspect-video";
+                  } else if (count <= 4) {
+                    gridClass = "grid grid-cols-1 gap-3 w-full overflow-y-auto max-h-full";
+                    itemClass = "aspect-video min-h-0";
+                  } else {
+                    gridClass = "grid grid-cols-2 gap-2 w-full overflow-y-auto max-h-full";
+                    itemClass = "aspect-video min-h-0";
+                  }
+                } else if (count === 1) {
                   gridClass = "flex justify-center items-center w-full h-full";
                   itemClass = "w-[70%] max-w-4xl aspect-video";
                 } else if (count === 2) {
@@ -581,6 +654,34 @@ const VideoCallScreen: React.FC = () => {
                   );
                 })}
 
+              {/* Agent connecting placeholder in sidebar */}
+              {isAgentLoading && !isAgentActive && (
+                <div
+                  className="relative aspect-video rounded-lg overflow-hidden bg-gradient-to-br from-[var(--agora-accent-blue)]/20 to-gray-800/60 border border-[var(--agora-accent-blue)]/40 flex flex-col items-center justify-center gap-2"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="AI agent is connecting"
+                >
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent animate-skeleton-shimmer"
+                  />
+                  <div className="relative flex items-center justify-center w-10 h-10 rounded-full bg-[var(--agora-accent-blue)]/20 ring-2 ring-[var(--agora-accent-blue)]/40">
+                    <span className="absolute inset-0 rounded-full bg-[var(--agora-accent-blue)]/30 animate-ping" />
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      className="w-5 h-5 text-[var(--agora-accent-blue)]"
+                    >
+                      <path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7h1a1 1 0 011 1v3a1 1 0 01-1 1h-1v1a2 2 0 01-2 2H5a2 2 0 01-2-2v-1H2a1 1 0 01-1-1v-3a1 1 0 011-1h1a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2zm-3 9a1 1 0 00-1 1v2a1 1 0 002 0v-2a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v2a1 1 0 002 0v-2a1 1 0 00-1-1z" />
+                    </svg>
+                  </div>
+                  <div className="relative text-xs text-white font-medium">
+                    Connecting…
+                  </div>
+                </div>
+              )}
+
               {/* Agent / avatar tile(s) in sidebar when whiteboard is open */}
               {isAgentActive && agentRtcUid && (
                 <div className="aspect-video rounded-lg overflow-hidden">
@@ -611,10 +712,77 @@ const VideoCallScreen: React.FC = () => {
       <Controls
         sendChatMessage={sendChatMessage}
         onToggleParticipantPanel={
-          !useSidebarLayout ? () => setIsParticipantPanelOpen((prev) => !prev) : undefined
+          isMobile
+            ? () => setIsParticipantSheetOpen(true)
+            : !useSidebarLayout
+              ? () => setIsParticipantPanelOpen((prev) => !prev)
+              : undefined
         }
-        isParticipantPanelOpen={isParticipantPanelOpen}
+        isParticipantPanelOpen={
+          isMobile ? isParticipantSheetOpen : isParticipantPanelOpen
+        }
       />
+
+      {/* Mobile: transcript bottom sheet */}
+      {isMobile && (
+        <BottomSheet
+          isOpen={isTranscriptSheetOpen}
+          onClose={() => setIsTranscriptSheetOpen(false)}
+          snapPoints={[0.55, 0.92]}
+          ariaLabelledBy="transcript-sheet-title"
+        >
+          <div className="h-full">
+            <TranscriptSidePanel
+              isOpen={true}
+              onClose={() => setIsTranscriptSheetOpen(false)}
+              embedded={true}
+              onSendMessage={
+                transcriptionMode === "rtm" && agentRtcUid
+                  ? sendChatMessage
+                  : undefined
+              }
+            />
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Mobile: participants bottom sheet */}
+      {isMobile && (
+        <BottomSheet
+          isOpen={isParticipantSheetOpen}
+          onClose={() => setIsParticipantSheetOpen(false)}
+          title={`Participants: ${participantCount}`}
+          snapPoints={[0.55, 0.92]}
+          ariaLabelledBy="participants-sheet-title"
+        >
+          <div className="px-3 py-3 bg-gray-50 dark:bg-gray-900/50">
+            <ParticipantListItem
+              name={localUsername}
+              micMuted={audioMuted}
+              videoMuted={videoMuted}
+              isLocal={true}
+            />
+            <hr className="my-3 border-gray-200 dark:border-gray-600" />
+            {Object.entries(remoteParticipants)
+              .filter(([uid]) => uid !== String(localUID))
+              .map(([uid, participant]) => (
+                <ParticipantListItem
+                  key={uid}
+                  uid={uid}
+                  name={participant.name}
+                  micMuted={participant.micMuted}
+                  videoMuted={participant.videoMuted}
+                  isLocal={false}
+                  isHost={isHost}
+                  onMuteAudio={handleMuteAudio}
+                  onMuteVideo={handleMuteVideo}
+                  onUnmuteAudio={handleUnmuteAudio}
+                  onUnmuteVideo={handleUnmuteVideo}
+                />
+              ))}
+          </div>
+        </BottomSheet>
+      )}
 
       <TourOverlay {...tour} />
 

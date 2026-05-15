@@ -15,8 +15,10 @@ import {
   MdSettings,
   MdSync,
   MdPeople,
+  MdMoreHoriz,
 } from "react-icons/md";
 import { useAgora } from "@/hooks/useAgora";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 import { showToast } from "@/services/uiService";
 import {
   setAgentSettings as persistAgentSettings,
@@ -28,6 +30,7 @@ import Modal from "@/components/common/Modal";
 import CopyButton from "@/components/common/CopyButton";
 import SettingsSidebar from "@/components/SettingsSidebar";
 import AgentStatusBadge from "@/components/AgentStatusBadge";
+import MoreActionsSheet from "@/components/MoreActionsSheet";
 import type { AgentSettings } from "@/types/agora";
 
 // Only LLM and MLLM params support auto-update via API. Adv settings = manual restart only.
@@ -119,6 +122,8 @@ const Controls: React.FC<ControlsProps> = ({
 
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const handleToggleScreenShare = async () => {
     if (isScreenSharing) {
@@ -345,6 +350,130 @@ const Controls: React.FC<ControlsProps> = ({
 
   const controlButtonClass =
     "flex items-center justify-center w-14 h-14 bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-white text-3xl rounded-full transition-colors duration-300 hover:bg-gray-400 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-agora focus:ring-opacity-75";
+
+  if (isMobile) {
+    return (
+      <React.Fragment>
+        <div
+          className="flex justify-around items-center h-16 bg-gray-200 dark:bg-gray-800 px-3 shadow-lg transition-colors duration-300"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          <button
+            data-tour="tour-mic-toggle"
+            onClick={toggleLocalAudio}
+            className="flex items-center justify-center w-12 h-12 bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-white text-2xl rounded-full focus:outline-none focus:ring-2 focus:ring-agora"
+            title={audioMuted ? "Unmute Mic" : "Mute Mic"}
+            aria-label={audioMuted ? "Unmute microphone" : "Mute microphone"}
+          >
+            {audioMuted ? <MdMicOff /> : <MdMic />}
+          </button>
+
+          <button
+            data-tour="tour-video-toggle"
+            onClick={toggleLocalVideo}
+            className="flex items-center justify-center w-12 h-12 bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-white text-2xl rounded-full focus:outline-none focus:ring-2 focus:ring-agora"
+            title={videoMuted ? "Turn Video On" : "Turn Video Off"}
+            aria-label={videoMuted ? "Turn video on" : "Turn video off"}
+          >
+            {videoMuted ? <MdVideocamOff /> : <MdVideocam />}
+          </button>
+
+          <button
+            data-tour="tour-end-call"
+            onClick={handleCallEnd}
+            className="flex items-center justify-center w-14 h-14 bg-red-600 dark:bg-red-500 text-white text-3xl rounded-full focus:outline-none focus:ring-2 focus:ring-red-500 shadow-lg"
+            title="End Call"
+            aria-label="End call"
+          >
+            <MdCallEnd />
+          </button>
+
+          <button
+            onClick={() => setIsMoreSheetOpen(true)}
+            className={`relative flex items-center justify-center w-12 h-12 text-2xl rounded-full focus:outline-none focus:ring-2 focus:ring-agora transition-colors ${
+              isMoreSheetOpen
+                ? "bg-agora text-white"
+                : "bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-white"
+            }`}
+            title="More actions"
+            aria-label="More actions"
+            aria-haspopup="dialog"
+            aria-expanded={isMoreSheetOpen}
+          >
+            <MdMoreHoriz />
+            {isHost && !isAgentActive && !isAgentLoading && (
+              <span
+                className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[var(--agora-accent-blue)] ring-2 ring-gray-200 dark:ring-gray-800"
+                aria-hidden
+              />
+            )}
+          </button>
+        </div>
+
+        <MoreActionsSheet
+          isOpen={isMoreSheetOpen}
+          onClose={() => setIsMoreSheetOpen(false)}
+          isScreenSharing={isScreenSharing}
+          onToggleScreenShare={handleToggleScreenShare}
+          isWhiteboardActive={isWhiteboardActive}
+          onToggleWhiteboard={handleToggleWhiteboard}
+          onShareMeeting={handleShareMeeting}
+          onOpenParticipants={onToggleParticipantPanel}
+          isHost={isHost}
+          isAgentActive={isAgentActive}
+          isAgentLoading={isAgentLoading}
+          isAgentUpdating={isAgentUpdating}
+          onToggleAgent={handleToggleAgent}
+          onOpenAgentSettings={() => setIsSettingsPanelOpen(true)}
+        />
+
+        <Modal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          title="Share Meeting Details"
+        >
+          <div className="space-y-4">
+            {hostPassphrase && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Host Passphrase:
+                </label>
+                <div className="flex items-center justify-between p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700">
+                  <span className="text-gray-900 dark:text-white text-base font-semibold truncate">
+                    {hostPassphrase}
+                  </span>
+                  <CopyButton textToCopy={hostPassphrase} />
+                </div>
+              </div>
+            )}
+
+            {viewerPassphrase && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Attendee Passphrase:
+                </label>
+                <div className="flex items-center justify-between p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700">
+                  <span className="text-gray-900 dark:text-white text-base font-semibold truncate">
+                    {viewerPassphrase}
+                  </span>
+                  <CopyButton textToCopy={viewerPassphrase} />
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+
+        <SettingsSidebar
+          isOpen={isSettingsPanelOpen}
+          onClose={() => setIsSettingsPanelOpen(false)}
+          onSaveAgentSettings={handleSaveAgentSettings}
+          isAgentUpdating={isAgentUpdating}
+          isAgentActive={isAgentActive}
+          asSheet
+        />
+      </React.Fragment>
+    );
+  }
 
   return (
     <React.Fragment>
