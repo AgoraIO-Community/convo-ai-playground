@@ -15,7 +15,7 @@ const LandingScreen: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-950 text-gray-100 overflow-hidden">
+    <div className="min-h-screen-dvh flex flex-col bg-gray-950 text-gray-100 overflow-hidden">
       {/* Background: gradient mesh + subtle grain (slow float for depth) */}
       <div className="fixed inset-0 pointer-events-none" aria-hidden>
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(0,194,255,0.12),transparent_50%)] animate-landing-bg-float origin-center" />

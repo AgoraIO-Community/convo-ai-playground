@@ -23,6 +23,7 @@ import type {
   MCPToolInfo,
 } from "@/types/agora";
 import Modal from "@/components/common/Modal";
+import BottomSheet from "@/components/common/BottomSheet";
 import TurnMetricsVisualization from "@/components/TurnMetricsVisualization";
 import type { IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
 import {
@@ -48,6 +49,8 @@ interface SettingsSidebarProps {
   onSaveAgentSettings: (settings: AgentSettings) => void;
   isAgentUpdating?: boolean;
   isAgentActive?: boolean;
+  /** When true, render as a bottom sheet (mobile). */
+  asSheet?: boolean;
 }
 
 // Tab button component
@@ -76,6 +79,7 @@ const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   onSaveAgentSettings,
   isAgentUpdating = false,
   isAgentActive = false,
+  asSheet = false,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>("ai-agent");
   const [useCustomPayload, setUseCustomPayload] = useState(false);
@@ -148,17 +152,9 @@ const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
       }
     : null;
 
-  return (
+  const inner = (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 z-40 transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Sidebar */}
-      <div className="fixed right-0 top-0 h-full w-[520px] max-w-full bg-white dark:bg-gray-900 z-50 shadow-2xl flex flex-col transition-colors duration-300">
-        {/* Header */}
+      {!asSheet && (
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -175,8 +171,9 @@ const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             <MdClose className="text-gray-500 dark:text-gray-400" size={24} />
           </button>
         </div>
+      )}
 
-        {/* Custom Settings row: View to open, Back when in custom view */}
+      {/* Custom Settings row: View to open, Back when in custom view */}
         <div className="px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <MdCode className="text-gray-600 dark:text-gray-400" size={20} />
@@ -304,6 +301,34 @@ const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             </div>
           )}
         </div>
+    </>
+  );
+
+  if (asSheet) {
+    return (
+      <BottomSheet
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Settings"
+        snapPoints={[0.92]}
+        ariaLabelledBy="settings-sheet-title"
+        contentClassName="bg-gray-50 dark:bg-gray-900/50"
+      >
+        {inner}
+      </BottomSheet>
+    );
+  }
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/50 z-40 transition-opacity"
+        onClick={onClose}
+      />
+      {/* Sidebar */}
+      <div className="fixed right-0 top-0 h-full w-[520px] max-w-full bg-white dark:bg-gray-900 z-50 shadow-2xl flex flex-col transition-colors duration-300">
+        {inner}
       </div>
     </>
   );

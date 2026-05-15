@@ -106,7 +106,7 @@ const JoinMeetingScreen: React.FC = () => {
   }
 
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white p-4 font-inter transition-colors duration-300">
+    <div className="relative flex flex-col items-center justify-center min-h-screen-dvh bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white p-4 font-inter transition-colors duration-300">
       <MeetingAuthHeader />
       <Card>
         <div className="flex items-center mb-6 sm:mb-8">
