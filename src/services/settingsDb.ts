@@ -89,6 +89,9 @@ function maskKeysForPersistence(settings: AgentSettings): AgentSettings {
     const p = out.avatar.params as unknown as Record<string, unknown>;
     if (String(p.api_key ?? "").trim()) p.api_key = MASKED_PLACEHOLDER;
   }
+  if (out.mllm?.api_key?.trim()) {
+    out.mllm.api_key = MASKED_PLACEHOLDER;
+  }
   return out;
 }
 

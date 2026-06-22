@@ -8,6 +8,10 @@ import type {
   MllmConfig,
 } from "@/types/agora";
 import { ELEVENLABS_DEFAULT_VOICE_ID } from "@/constants/elevenlabsDefaults";
+import {
+  buildMllmInvitePayload,
+  getMllmApiKeyEnvName,
+} from "@/utils/mllmEnv";
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE!;
@@ -224,6 +228,40 @@ async function handleCustomPayloadJoin(
     (avatar as Record<string, unknown>).vendor = "liveavatar";
   }
 
+  const customAdvanced = properties.advanced_features as
+    | { enable_mllm?: boolean }
+    | undefined;
+  const customMllm = properties.mllm as MllmConfig | undefined;
+  if (customAdvanced?.enable_mllm && customMllm) {
+    const { style, apiKey, payload } = buildMllmInvitePayload(
+      customMllm,
+      shouldInjectServerKey,
+    );
+    if (!apiKey) {
+      return NextResponse.json(
+        {
+          error: `${getMllmApiKeyEnvName(style)} is not configured. Set it in .env or provide mllm.api_key in the custom payload.`,
+        },
+        { status: 400 },
+      );
+    }
+    properties.mllm = payload;
+    delete properties.llm;
+    delete properties.tts;
+    delete properties.asr;
+    delete properties.turn_detection;
+    const adv =
+      typeof properties.advanced_features === "object" &&
+      properties.advanced_features != null
+        ? (properties.advanced_features as Record<string, unknown>)
+        : {};
+    properties.advanced_features = {
+      ...adv,
+      enable_mllm: true,
+      enable_tools: false,
+    };
+  }
+
   if (avatar?.enable && properties.tts && typeof properties.tts === "object") {
     const tts = properties.tts as Record<string, unknown>;
     const v = avatar.vendor as string | undefined;
@@ -401,7 +439,9 @@ export async function POST(request: NextRequest) {
       advanced_features,
       parameters,
       avatar,
+      mllm,
     } = agentSettings;
+    const useMllm = Boolean(advanced_features?.enable_mllm);
 
     // Generate token with RTC+RTM privileges when RTM is enabled
     // Per: https://docs.agora.io/en/help/integration-issues/rtc_rtm_token
@@ -620,68 +660,37 @@ export async function POST(request: NextRequest) {
       remote_rtc_uids: remoteRtcUids,
       enable_string_uid: false,
       idle_timeout: agentSettings.idle_timeout || 30,
-      llm: llmPayload,
-      tts: ttsPayload,
     };
 
-    // Add optional ASR config
-    if (asrPayload && Object.keys(asrPayload).length > 0) {
-      propertiesPayload.asr = asrPayload;
-    }
-
-    // Add MLLM config (v2.6 cleaner turn handling under mllm.turn_detection).
-    // Only include when advanced_features.enable_mllm is true and the user has
-    // configured mllm fields. We inject the server-side key for the
-    // selected MLLM style when the client sent an empty/sentinel value.
-    const mllm = (agentSettings as { mllm?: MllmConfig }).mllm;
-    if (advanced_features?.enable_mllm && mllm) {
-      const mllmStyle = mllm.style ?? "openai";
-      const mllmApiKey = shouldInjectServerKey(mllm.api_key)
-        ? (mllmStyle === "gemini"
-            ? process.env.GEMINI_API_KEY ||
-              process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
-              ""
-            : process.env.OPENAI_API_KEY ||
-              process.env.NEXT_PUBLIC_OPENAI_API_KEY ||
-              ""
-          ).trim()
-        : (mllm.api_key ?? "").trim();
-
-      const mllmPayload: Record<string, unknown> = { style: mllmStyle };
-      if (mllm.url) mllmPayload.url = mllm.url;
-      if (mllmApiKey) mllmPayload.api_key = mllmApiKey;
-      if (mllm.headers) mllmPayload.headers = mllm.headers;
-      if (mllm.params && Object.keys(mllm.params).length > 0) {
-        mllmPayload.params = mllm.params;
+    if (useMllm) {
+      if (!mllm) {
+        return NextResponse.json(
+          {
+            error:
+              "enable_mllm is true but mllm configuration is missing from agent settings.",
+          },
+          { status: 400 },
+        );
       }
-      if (mllm.system_messages && mllm.system_messages.length > 0) {
-        mllmPayload.system_messages = mllm.system_messages;
+      const { style, apiKey, payload } = buildMllmInvitePayload(
+        mllm,
+        shouldInjectServerKey,
+      );
+      if (!apiKey) {
+        return NextResponse.json(
+          {
+            error: `${getMllmApiKeyEnvName(style)} is not configured. Set it in .env or provide an API key in Settings.`,
+          },
+          { status: 400 },
+        );
       }
-      if (mllm.greeting_message) {
-        mllmPayload.greeting_message = mllm.greeting_message;
+      propertiesPayload.mllm = payload;
+    } else {
+      propertiesPayload.llm = llmPayload;
+      propertiesPayload.tts = ttsPayload;
+      if (asrPayload && Object.keys(asrPayload).length > 0) {
+        propertiesPayload.asr = asrPayload;
       }
-      if (mllm.failure_message) {
-        mllmPayload.failure_message = mllm.failure_message;
-      }
-      if (mllm.max_history != null) {
-        mllmPayload.max_history = mllm.max_history;
-      }
-      if (mllm.input_modalities && mllm.input_modalities.length > 0) {
-        mllmPayload.input_modalities = mllm.input_modalities;
-      }
-      if (mllm.output_modalities && mllm.output_modalities.length > 0) {
-        mllmPayload.output_modalities = mllm.output_modalities;
-      }
-      // v2.6: vendor-specific turn detection
-      if (mllm.turn_detection) {
-        const td = mllm.turn_detection;
-        const provider = td.provider ?? mllmStyle;
-        const tdPayload: Record<string, unknown> = { provider };
-        if (provider === "openai" && td.openai) tdPayload.openai = td.openai;
-        if (provider === "gemini" && td.gemini) tdPayload.gemini = td.gemini;
-        mllmPayload.turn_detection = tdPayload;
-      }
-      propertiesPayload.mllm = mllmPayload;
     }
 
     // Add turn detection (Agora v2 config format)
@@ -725,8 +734,13 @@ export async function POST(request: NextRequest) {
               },
             } as TurnDetectionConfig)
           : null;
-    // Only include turn_detection when user has enabled it (draft vs apply)
-    if (agentSettings.enable_turn_detection && turnDetectionNormalized) {
+    // Only include turn_detection when user has enabled it (draft vs apply).
+    // Classic pipeline only — MLLM uses mllm.turn_detection.
+    if (
+      !useMllm &&
+      agentSettings.enable_turn_detection &&
+      turnDetectionNormalized
+    ) {
       const td = turnDetectionNormalized;
       const cfg = td.config!;
       const start = cfg.start_of_speech;
@@ -842,7 +856,7 @@ export async function POST(request: NextRequest) {
       | "image"
     )[]) ?? ["text", "image"];
     const needsRtmForImage =
-      !rtmExplicitlyDisabled && inputModalities.includes("image");
+      !useMllm && !rtmExplicitlyDisabled && inputModalities.includes("image");
 
     // Add advanced features; auto-enable tools when any enabled MCP server is configured
     const hasMcpServers = enabledMcpServers.length > 0;
@@ -855,8 +869,11 @@ export async function POST(request: NextRequest) {
         ...(advanced_features?.enable_sal !== undefined && {
           enable_sal: advanced_features.enable_sal,
         }),
-        enable_tools: enableTools,
+        ...(useMllm && { enable_mllm: true }),
+        enable_tools: useMllm ? false : enableTools,
       };
+    } else if (useMllm) {
+      propertiesPayload.advanced_features = { enable_mllm: true };
     }
 
     // Add agent parameters

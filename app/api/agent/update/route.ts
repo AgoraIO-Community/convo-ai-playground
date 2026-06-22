@@ -47,7 +47,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { llm, advanced_features } = agentSettings;
+    const { llm, advanced_features, mllm } = agentSettings;
+    const useMllm = Boolean(advanced_features?.enable_mllm && mllm);
 
     // Regenerate token (may change if RTM is toggled)
     const agentUid = 0;
@@ -90,16 +91,10 @@ export async function POST(request: NextRequest) {
       token: agentRtcToken,
     };
 
-    if (Object.keys(llmPayload).length > 0) {
+    if (useMllm && mllm?.params && typeof mllm.params === "object") {
+      propertiesPayload.mllm = { params: mllm.params };
+    } else if (Object.keys(llmPayload).length > 0) {
       propertiesPayload.llm = llmPayload;
-    }
-
-    if (
-      advanced_features?.enable_mllm &&
-      llm.params &&
-      typeof llm.params === "object"
-    ) {
-      propertiesPayload.mllm = { params: llm.params };
     }
 
     const updatePayload = {

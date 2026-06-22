@@ -380,6 +380,12 @@ import {
 } from "@/types/agora";
 import InfoTooltip from "@/components/common/InfoTooltip";
 import ElevenLabsVoicePicker from "@/components/ElevenLabsVoicePicker";
+import MllmSettingsPanel from "@/components/MllmSettingsPanel";
+import {
+  getDefaultMllmSettings,
+  getDefaultMllmVendor,
+  getMllmDefaultConfig,
+} from "@/utils/mllmEnv";
 import {
   MdExpandMore,
   MdExpandLess,
@@ -570,6 +576,8 @@ const getDefaultAvatarParams = (
 export const getDefaultSettings = (): AgentSettingsType => {
   const ttsVendor = getDefaultTTSVendor();
   const asrVendor = getDefaultASRVendor();
+  const mllmVendor = getDefaultMllmVendor();
+  const mllmDefaults = getMllmDefaultConfig(mllmVendor);
 
   return {
     name: `agent-${Date.now()}`,
@@ -649,6 +657,18 @@ export const getDefaultSettings = (): AgentSettingsType => {
       enable_sal: false,
       enable_rtm: false,
       enable_tools: false,
+      enable_mllm: false,
+    },
+    mllm: {
+      style: mllmVendor,
+      url: mllmDefaults.url,
+      api_key: "",
+      params: mllmDefaults.params,
+      greeting_message: mllmDefaults.greeting_message,
+      failure_message: mllmDefaults.failure_message,
+      input_modalities: mllmDefaults.input_modalities,
+      output_modalities: mllmDefaults.output_modalities,
+      turn_detection: mllmDefaults.turn_detection,
     },
     avatar: {
       enable: false,
@@ -770,8 +790,14 @@ const Section: React.FC<{
   onToggle: () => void;
   children: React.ReactNode;
   badge?: string;
-}> = ({ title, icon, isOpen, onToggle, children, badge }) => (
-  <div className="border border-gray-300 dark:border-gray-700 rounded-lg mb-3 overflow-hidden">
+  disabled?: boolean;
+  disabledHint?: string;
+}> = ({ title, icon, isOpen, onToggle, children, badge, disabled, disabledHint }) => (
+  <div
+    className={`border border-gray-300 dark:border-gray-700 rounded-lg mb-3 overflow-hidden ${
+      disabled ? "opacity-60" : ""
+    }`}
+  >
     <button
       onClick={onToggle}
       className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-800/50 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
@@ -794,7 +820,16 @@ const Section: React.FC<{
       )}
     </button>
     {isOpen && (
-      <div className="px-4 py-4 bg-gray-50 dark:bg-gray-900/50">{children}</div>
+      <div className="px-4 py-4 bg-gray-50 dark:bg-gray-900/50">
+        {disabled && disabledHint && (
+          <p className="mb-3 text-xs text-amber-700 dark:text-amber-300">
+            {disabledHint}
+          </p>
+        )}
+        <fieldset disabled={disabled} className={disabled ? "pointer-events-none" : ""}>
+          {children}
+        </fieldset>
+      </div>
     )}
   </div>
 );
@@ -838,8 +873,14 @@ const CollapsibleSubSection: React.FC<{
   isOpen: boolean;
   onToggle: () => void;
   children: React.ReactNode;
-}> = ({ title, description, isOpen, onToggle, children }) => (
-  <div className="mb-4 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+  disabled?: boolean;
+  disabledHint?: string;
+}> = ({ title, description, isOpen, onToggle, children, disabled, disabledHint }) => (
+  <div
+    className={`mb-4 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden ${
+      disabled ? "opacity-60" : ""
+    }`}
+  >
     <button
       onClick={onToggle}
       className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-100 dark:bg-gray-800/70 hover:bg-gray-150 dark:hover:bg-gray-800 transition-colors text-left"
@@ -868,7 +909,14 @@ const CollapsibleSubSection: React.FC<{
     </button>
     {isOpen && (
       <div className="px-3 py-3 bg-gray-50 dark:bg-gray-900/30 border-t border-gray-200 dark:border-gray-600">
-        {children}
+        {disabled && disabledHint && (
+          <p className="mb-3 text-xs text-amber-700 dark:text-amber-300">
+            {disabledHint}
+          </p>
+        )}
+        <fieldset disabled={disabled} className={disabled ? "pointer-events-none" : ""}>
+          {children}
+        </fieldset>
       </div>
     )}
   </div>
@@ -1568,6 +1616,8 @@ function buildJoinPayloadPreview(
       2,
     );
   }
+  const useMllmPreview =
+    settings.advanced_features?.enable_mllm && settings.mllm;
   const props: Record<string, unknown> = {
     channel: "<set by server>",
     token: "<set by server>",
@@ -1575,34 +1625,52 @@ function buildJoinPayloadPreview(
     remote_rtc_uids: ["<uid>"],
     enable_string_uid: false,
     idle_timeout: settings.idle_timeout ?? 30,
-    llm: settings.llm
+    ...(useMllmPreview
       ? {
-          ...settings.llm,
-          api_key:
-            settings.llm.api_key && settings.llm.api_key.trim()
-              ? JOIN_PAYLOAD_MASK
-              : "",
-          // Only include enabled MCP servers, strip the UI-only 'enabled' field
-          mcp_servers: (settings.llm.mcp_servers ?? [])
-            .filter((s) => s.enabled)
-            .map(({ enabled: _, ...rest }) => rest),
-          // Template variables: use joined user's name when available
-          template_variables: {
-            username: usernameValue,
-            ...(typeof settings.llm.template_variables === "object" &&
-            settings.llm.template_variables != null
-              ? settings.llm.template_variables
-              : {}),
+          mllm: {
+            ...settings.mllm,
+            enable: true,
+            api_key:
+              settings.mllm?.api_key && settings.mllm.api_key.trim()
+                ? JOIN_PAYLOAD_MASK
+                : "",
+          },
+          advanced_features: {
+            ...settings.advanced_features,
+            enable_mllm: true,
+            enable_tools: false,
           },
         }
-      : {},
-    tts: settings.tts ?? {},
-    asr: settings.asr ?? undefined,
-    turn_detection: settings.enable_turn_detection
-      ? (settings.turn_detection ?? undefined)
-      : undefined,
+      : {
+          llm: settings.llm
+            ? {
+                ...settings.llm,
+                api_key:
+                  settings.llm.api_key && settings.llm.api_key.trim()
+                    ? JOIN_PAYLOAD_MASK
+                    : "",
+                // Only include enabled MCP servers, strip the UI-only 'enabled' field
+                mcp_servers: (settings.llm.mcp_servers ?? [])
+                  .filter((s) => s.enabled)
+                  .map(({ enabled: _, ...rest }) => rest),
+                // Template variables: use joined user's name when available
+                template_variables: {
+                  username: usernameValue,
+                  ...(typeof settings.llm.template_variables === "object" &&
+                  settings.llm.template_variables != null
+                    ? settings.llm.template_variables
+                    : {}),
+                },
+              }
+            : {},
+          tts: settings.tts ?? {},
+          asr: settings.asr ?? undefined,
+          turn_detection: settings.enable_turn_detection
+            ? (settings.turn_detection ?? undefined)
+            : undefined,
+          advanced_features: settings.advanced_features ?? undefined,
+        }),
     filler_words: settings.filler_words ?? undefined,
-    advanced_features: settings.advanced_features ?? undefined,
     parameters: settings.parameters ?? undefined,
     avatar: settings.avatar ?? undefined,
   };
@@ -2256,9 +2324,21 @@ const AgentSettingsSidebarContent: React.FC<{
     });
   };
 
+  const mllmEnabled = settings.advanced_features?.enable_mllm ?? false;
+  const pipelineDisabledHint = "Disabled while MLLM is enabled";
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto px-6 py-4 bg-gray-50 dark:bg-gray-900/50">
+        {mllmEnabled && (
+          <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              MLLM mode is active. ASR, LLM, TTS, and classic turn detection are
+              not sent to Agora. Configure voice behavior in Advanced → Features
+              → MLLM.
+            </p>
+          </div>
+        )}
         {/* Info banner - which changes apply live vs require restart */}
         {isAgentActive && (
           <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
@@ -2298,7 +2378,9 @@ const AgentSettingsSidebarContent: React.FC<{
           icon={<BotIcon size={20} />}
           isOpen={expandedSections.llm}
           onToggle={() => toggleSection("llm")}
-          badge="Required"
+          badge={mllmEnabled ? undefined : "Required"}
+          disabled={mllmEnabled}
+          disabledHint={pipelineDisabledHint}
         >
           <FormField
             label="Provider"
@@ -2456,7 +2538,9 @@ const AgentSettingsSidebarContent: React.FC<{
           icon={<MdRecordVoiceOver size={20} />}
           isOpen={expandedSections.tts}
           onToggle={() => toggleSection("tts")}
-          badge="Required"
+          badge={mllmEnabled ? undefined : "Required"}
+          disabled={mllmEnabled}
+          disabledHint={pipelineDisabledHint}
         >
           <FormField label="Vendor" required>
             <CustomSelect
@@ -2631,6 +2715,8 @@ const AgentSettingsSidebarContent: React.FC<{
           icon={<MdGraphicEq size={20} />}
           isOpen={expandedSections.asr}
           onToggle={() => toggleSection("asr")}
+          disabled={mllmEnabled}
+          disabledHint={pipelineDisabledHint}
         >
           <FormField
             label="Vendor"
@@ -3131,6 +3217,8 @@ const AgentSettingsSidebarContent: React.FC<{
             description="When the agent detects user speech start and end (turn_detection)"
             isOpen={advancedSubsections.turnDetection}
             onToggle={() => toggleAdvancedSubsection("turnDetection")}
+            disabled={mllmEnabled}
+            disabledHint="Use MLLM turn detection below when MLLM is enabled."
           >
             <Toggle
               label="Enable turn detection"
@@ -3804,7 +3892,7 @@ const AgentSettingsSidebarContent: React.FC<{
 
           <CollapsibleSubSection
             title="Features"
-            description="SAL, RTM, Tools"
+            description="SAL, RTM, Tools, MLLM"
             isOpen={advancedSubsections.features}
             onToggle={() => toggleAdvancedSubsection("features")}
           >
@@ -3927,6 +4015,39 @@ const AgentSettingsSidebarContent: React.FC<{
               }
               hint="Function calling support."
             />
+            <Toggle
+              label="Enable MLLM (voice-to-voice)"
+              checked={settings.advanced_features?.enable_mllm ?? false}
+              onChange={(checked) =>
+                setSettings({
+                  ...settings,
+                  advanced_features: {
+                    ...settings.advanced_features,
+                    enable_mllm: checked,
+                    enable_tools: checked
+                      ? false
+                      : (settings.advanced_features?.enable_tools ?? false),
+                  },
+                  mllm: checked
+                    ? (settings.mllm ?? getDefaultMllmSettings())
+                    : settings.mllm,
+                  enable_turn_detection: checked
+                    ? false
+                    : settings.enable_turn_detection,
+                })
+              }
+              hint="OpenAI Realtime / Gemini Live / xAI Grok. Replaces ASR + LLM + TTS when enabled."
+            />
+            {mllmEnabled && (
+              <MllmSettingsPanel
+                settings={settings}
+                setSettings={setSettings}
+                FormField={FormField}
+                Input={Input}
+                Textarea={Textarea}
+                CustomSelect={CustomSelect}
+              />
+            )}
           </CollapsibleSubSection>
         </Section>
       </div>

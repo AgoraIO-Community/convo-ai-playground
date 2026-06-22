@@ -317,25 +317,43 @@ export interface AgentParametersConfig {
 
 // --- MLLM (Multimodal LLM, voice-to-voice) ---
 /** MLLM provider style. v2.6 introduces vendor-specific MLLM turn detection. */
-export type MllmStyle = "openai" | "gemini";
+export type MllmStyle = "openai" | "gemini" | "xai";
 
-/** Vendor-specific MLLM turn detection (v2.6 cleaner refactor). */
+/** MLLM turn detection mode (Agora join API — inside `mllm.turn_detection`). */
+export type MllmTurnDetectionMode =
+  | "server_vad"
+  | "agora_vad"
+  | "semantic_vad";
+
+/** Agora-documented MLLM turn detection (replaces top-level `turn_detection` when MLLM is on). */
 export interface MllmTurnDetection {
-  /**
-   * Provider for MLLM turn detection.
-   * - `openai`: OpenAI Realtime server VAD / semantic VAD config.
-   * - `gemini`: Google Gemini Live activity-detection config.
-   */
-  provider?: "openai" | "gemini";
-  /** OpenAI Realtime server_vad / semantic_vad config (passed through verbatim). */
+  mode?: MllmTurnDetectionMode;
+  server_vad_config?: {
+    prefix_padding_ms?: number;
+    silence_duration_ms?: number;
+    threshold?: number;
+    idle_timeout_ms?: number;
+    start_of_speech_sensitivity?: string;
+    end_of_speech_sensitivity?: string;
+  };
+  agora_vad_config?: {
+    interrupt_duration_ms?: number;
+    prefix_padding_ms?: number;
+    silence_duration_ms?: number;
+    threshold?: number;
+  };
+  semantic_vad_config?: {
+    eagerness?: "auto" | "low" | "medium" | "high";
+  };
+  /** @deprecated Legacy shape — normalized on invite when `mode` is absent. */
+  provider?: "openai" | "gemini" | "xai";
   openai?: Record<string, unknown>;
-  /** Google Gemini Live realtime_input_config / activity_detection config (passed through verbatim). */
   gemini?: Record<string, unknown>;
 }
 
 /** MLLM (voice-to-voice) configuration. */
 export interface MllmConfig {
-  /** MLLM provider style (openai for OpenAI Realtime; gemini for Gemini Live). */
+  /** MLLM provider style (openai, gemini, or xai for xAI Grok Realtime). */
   style?: MllmStyle;
   /** API endpoint URL */
   url?: string;
@@ -345,6 +363,8 @@ export interface MllmConfig {
   headers?: string;
   /** Provider-specific parameters (model, voice, temperature, etc.) */
   params?: Record<string, unknown>;
+  /** MLLM conversation messages, used by providers such as xAI Grok for system context */
+  messages?: Array<{ role: string; content: string }>;
   /** System messages for context */
   system_messages?: Array<{ role: string; content: string }>;
   /** Greeting message */
@@ -355,7 +375,7 @@ export interface MllmConfig {
   max_history?: number;
   /**
    * MLLM turn detection — refactored in v2.6 for clearer vendor-specific control
-   * across OpenAI Realtime and Google Gemini Live.
+   * across OpenAI Realtime, Google Gemini Live, and xAI Grok.
    */
   turn_detection?: MllmTurnDetection;
   /** Allowed input modalities */

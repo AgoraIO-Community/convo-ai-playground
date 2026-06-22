@@ -42,7 +42,8 @@ function hasUpdatableChanges(
   return (
     JSON.stringify(prev.llm?.system_messages) !==
       JSON.stringify(next.llm?.system_messages) ||
-    JSON.stringify(prev.llm?.params) !== JSON.stringify(next.llm?.params)
+    JSON.stringify(prev.llm?.params) !== JSON.stringify(next.llm?.params) ||
+    JSON.stringify(prev.mllm?.params) !== JSON.stringify(next.mllm?.params)
   );
 }
 
@@ -59,6 +60,7 @@ function hasRestartRequiredChanges(
       JSON.stringify(next.turn_detection) ||
     JSON.stringify(prev.advanced_features) !==
       JSON.stringify(next.advanced_features) ||
+    JSON.stringify(prev.mllm) !== JSON.stringify(next.mllm) ||
     JSON.stringify(prev.llm?.url) !== JSON.stringify(next.llm?.url) ||
     JSON.stringify(prev.llm?.api_key) !== JSON.stringify(next.llm?.api_key) ||
     prev.llm?.max_history !== next.llm?.max_history ||
