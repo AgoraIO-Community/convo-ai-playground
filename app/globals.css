@@ -1,0 +1,278 @@
+/* app/globals.css */
+
+@import "tailwindcss";
+
+@theme {
+  --color-agora-accent-blue: #00c2ff;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+:root { /* Light Theme */
+  --color-bg-primary: 243 244 246;
+  --color-bg-secondary: 209 213 219;
+  --color-bg-card: 255 255 255;
+  --color-bg-input: 249 250 251;
+  --color-text-primary: 17 24 39;
+  --color-text-secondary: 107 114 128;
+  --color-text-placeholder: 156 163 175;
+  --color-brand-blue: 37 99 235; /* blue-600 */
+  --color-brand-green: 22 163 74; /* green-600 */
+  --color-brand-red: 220 38 38; /* red-600 */
+  --color-border-primary: 229 231 235;
+  --agora-accent-blue: #00c2ff;
+
+  /* --- NEW: Light Theme Hover Colors --- */
+  --color-brand-blue-hover: 29 78 216; /* blue-700 */
+  --color-brand-green-hover: 21 128 61; /* green-700 */
+  --color-brand-red-hover: 185 28 28; /* red-700 */
+  /* --- END NEW --- */
+}
+
+.dark { /* Dark Theme */
+  --color-bg-primary: 17 24 39;
+  --color-bg-secondary: 31 41 55;
+  --color-bg-card: 31 41 55;
+  --color-bg-input: 55 65 81;
+  --color-text-primary: 249 250 251;
+  --color-text-secondary: 156 163 175;
+  --color-text-placeholder: 107 114 128;
+  --color-brand-blue: 96 165 250; /* blue-400 */
+  --color-brand-green: 74 222 128; /* green-400 */
+  --color-brand-red: 248 113 113; /* red-400 */
+  --color-border-primary: 75 85 99;
+  --agora-accent-blue: #00c2ff;
+
+  /* --- NEW: Dark Theme Hover Colors --- */
+  --color-brand-blue-hover: 59 130 246; /* blue-500 */
+  --color-brand-green-hover: 34 197 94; /* green-500 */
+  --color-brand-red-hover: 239 68 68; /* red-500 */
+  /* --- END NEW --- */
+}
+
+/* Theme-aligned scrollbars (light: subtle gray; dark: dark gray to match sidebar) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(209 213 219) rgb(243 244 246);
+}
+.dark * {
+  scrollbar-color: rgb(75 85 99) rgb(31 41 55);
+}
+
+/* WebKit (Chrome, Safari, Edge) */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: rgb(243 244 246);
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(209 213 219);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(156 163 175);
+}
+.dark *::-webkit-scrollbar-track {
+  background: rgb(31 41 55);
+}
+.dark *::-webkit-scrollbar-thumb {
+  background: rgb(75 85 99);
+  border-radius: 4px;
+}
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: rgb(107 114 128);
+}
+
+/* Landing page staggered reveal */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+
+/* Feature tour: spotlight glow pulse */
+@keyframes tour-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Agent tile: animate icon only (no tile zoom) - subtle pulse */
+@keyframes agent-icon-pulse {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+.animate-agent-icon-pulse {
+  animation: agent-icon-pulse 2.2s ease-in-out infinite;
+}
+
+/* Slightly stronger for speaking state (icon only) */
+@keyframes agent-icon-speaking {
+  0%, 100% { opacity: 0.95; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+.animate-agent-icon-speaking {
+  animation: agent-icon-speaking 1.4s ease-in-out infinite;
+}
+
+/* Dots/bars under icon (RTM state indicators) */
+@keyframes agent-state-soft {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+.animate-agent-state-soft {
+  animation: agent-state-soft 2s ease-in-out infinite;
+}
+
+/* Agent tile: shadow + vintage, less bright */
+.agent-tile-vintage {
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.45),
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  filter: brightness(0.92);
+}
+
+/* Button shimmer effect - continuous animation */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(50%);
+  }
+}
+.animate-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* Skeleton loading screen shimmer (full left-to-right sweep) */
+@keyframes skeleton-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+.animate-skeleton-shimmer {
+  animation: skeleton-shimmer 1.8s ease-in-out infinite;
+}
+
+/* ----- Landing: subtle, classy animations (respect reduced motion) ----- */
+@keyframes landing-bg-float {
+  0%, 100% {
+    opacity: 0.12;
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    opacity: 0.18;
+    transform: scale(1.03) translate(2%, 1%);
+  }
+}
+@keyframes landing-bg-float-secondary {
+  0%, 100% {
+    opacity: 0.08;
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    opacity: 0.12;
+    transform: scale(1.02) translate(-1%, -1%);
+  }
+}
+.animate-landing-bg-float {
+  animation: landing-bg-float 12s ease-in-out infinite;
+}
+.animate-landing-bg-float-secondary {
+  animation: landing-bg-float-secondary 14s ease-in-out infinite;
+}
+
+@keyframes landing-gradient-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+.animate-landing-gradient-shimmer {
+  background-size: 200% auto;
+  animation: landing-gradient-shimmer 8s ease-in-out infinite;
+}
+
+@keyframes landing-button-glow {
+  0%, 100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.animate-landing-button-glow {
+  position: relative;
+  border-radius: 0.75rem; /* match button rounded-xl */
+}
+.animate-landing-button-glow::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 32px 6px rgba(0, 194, 255, 0.25);
+  animation: landing-button-glow 2.25s ease-in-out infinite;
+  z-index: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-landing-bg-float,
+  .animate-landing-bg-float-secondary,
+  .animate-landing-gradient-shimmer {
+    animation: none;
+  }
+  .animate-landing-button-glow::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* ----- Mobile responsive utilities ----- */
+
+/* Dynamic viewport height — accounts for mobile browser chrome */
+@supports (height: 100dvh) {
+  .h-screen-dvh { height: 100dvh; }
+  .min-h-screen-dvh { min-height: 100dvh; }
+}
+@supports not (height: 100dvh) {
+  .h-screen-dvh { height: 100vh; }
+  .min-h-screen-dvh { min-height: 100vh; }
+}
+
+/* Bottom sheet enter animation */
+@keyframes sheet-enter {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.sheet-overlay > div:last-child {
+  animation: sheet-enter 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-overlay > div:last-child {
+    animation: none;
+  }
+}
