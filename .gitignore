@@ -41,6 +41,7 @@ src/**/*.d.ts
 !src/**/*.config.js
 
 .agents/*
+.worktrees/
 
 # Local docs (not committed)
 docs/
