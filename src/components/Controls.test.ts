@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   onEndCall: vi.fn(),
   toggleLocalAudio: vi.fn(),
   toggleLocalVideo: vi.fn(),
+  configureRtm: vi.fn(),
   inviteAgent: vi.fn(),
   setAgentLoading: vi.fn(),
   setAgentActive: vi.fn(),
@@ -53,6 +54,7 @@ vi.mock("@/hooks/useAgora", () => ({
   useAgora: () => ({
     toggleLocalAudio: mocks.toggleLocalAudio,
     toggleLocalVideo: mocks.toggleLocalVideo,
+    configureRtm: mocks.configureRtm,
   }),
 }));
 
@@ -86,6 +88,7 @@ describe("Controls", () => {
       agentId: "agent-1",
       agentRtcUid: "100",
     });
+    mocks.configureRtm.mockResolvedValue(null);
     mocks.getCustomAgentSettings.mockResolvedValue(null);
     mocks.settingsSidebarProps.length = 0;
     state.agentSettings = { advanced_features: { enable_rtm: true } };
@@ -124,7 +127,7 @@ describe("Controls", () => {
     expect(latestProps?.asSheet).not.toBe(true);
   });
 
-  it("forces RTM agent delivery for legacy settings that disabled it", async () => {
+  it("uses RTC data-stream delivery when RTM is disabled", async () => {
     state.agentSettings = { advanced_features: { enable_rtm: false } };
     render(React.createElement(Controls, { onEndCall: mocks.onEndCall }));
 
@@ -135,15 +138,16 @@ describe("Controls", () => {
       "channel-private",
       "42",
       expect.objectContaining({
-        advanced_features: expect.objectContaining({ enable_rtm: true }),
-        parameters: expect.objectContaining({ data_channel: "rtm" }),
+        advanced_features: expect.objectContaining({ enable_rtm: false }),
+        parameters: expect.objectContaining({ data_channel: "rtc" }),
       }),
       expect.any(Object),
     );
-    expect(mocks.setTranscriptionMode).toHaveBeenCalledWith("rtm");
+    expect(mocks.setTranscriptionMode).toHaveBeenCalledWith("rtc");
+    expect(mocks.configureRtm).toHaveBeenCalledWith(false);
   });
 
-  it("forces RTM delivery in a custom agent payload", async () => {
+  it("honors RTC delivery in a custom agent payload", async () => {
     mocks.getCustomAgentSettings.mockResolvedValue({
       useCustomPayload: true,
       customPayloadJson: JSON.stringify({
@@ -166,12 +170,14 @@ describe("Controls", () => {
       expect.objectContaining({
         customJoinPayload: expect.objectContaining({
           properties: expect.objectContaining({
-            advanced_features: expect.objectContaining({ enable_rtm: true }),
-            parameters: expect.objectContaining({ data_channel: "rtm" }),
+            advanced_features: expect.objectContaining({ enable_rtm: false }),
+            parameters: expect.objectContaining({ data_channel: "rtc" }),
           }),
         }),
       }),
     );
+    expect(mocks.setTranscriptionMode).toHaveBeenCalledWith("rtc");
+    expect(mocks.configureRtm).toHaveBeenCalledWith(false);
   });
 
   it("delegates end-call cleanup before the screen navigates", () => {

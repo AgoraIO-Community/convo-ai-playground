@@ -14,6 +14,11 @@ import {
 import { inviteAgent, stopAgent, updateAgent } from "@/api/agentApi";
 import SettingsSidebar from "@/components/SettingsSidebar";
 import { useAgora } from "@/hooks/useAgora";
+import {
+  getTranscriptTransport,
+  withCustomPayloadTranscriptTransport,
+  withTranscriptTransport,
+} from "@/lib/agora/transcriptTransport";
 import { showToast } from "@/services/uiService";
 import {
   getCustomAgentSettings,
@@ -25,51 +30,6 @@ import { sanitizeCustomJoinPayload } from "@/utils/customPayloadSanitize";
 
 interface ControlsProps {
   onEndCall: () => Promise<void>;
-}
-
-function requireRtmSettings(settings: AgentSettings): AgentSettings {
-  return {
-    ...settings,
-    advanced_features: {
-      ...settings.advanced_features,
-      enable_rtm: true,
-    },
-    parameters: {
-      ...settings.parameters,
-      data_channel: "rtm",
-    },
-  };
-}
-
-function requireRtmCustomPayload(payload: {
-  name: string;
-  properties: Record<string, unknown>;
-}): { name: string; properties: Record<string, unknown> } {
-  const advancedFeatures =
-    typeof payload.properties.advanced_features === "object" &&
-    payload.properties.advanced_features !== null
-      ? (payload.properties.advanced_features as Record<string, unknown>)
-      : {};
-  const parameters =
-    typeof payload.properties.parameters === "object" &&
-    payload.properties.parameters !== null
-      ? (payload.properties.parameters as Record<string, unknown>)
-      : {};
-
-  return {
-    ...payload,
-    properties: {
-      ...payload.properties,
-      advanced_features: {
-        ...advancedFeatures,
-        enable_rtm: true,
-      },
-      parameters: {
-        ...parameters,
-        data_channel: "rtm",
-      },
-    },
-  };
 }
 
 function hasUpdatableChanges(
@@ -121,7 +81,7 @@ const Controls: React.FC<ControlsProps> = ({ onEndCall }) => {
   const setAgentUpdating = useAppStore((state) => state.setAgentUpdating);
   const clearAgent = useAppStore((state) => state.clearAgent);
   const setAgentSettings = useAppStore((state) => state.setAgentSettings);
-  const { toggleLocalAudio, toggleLocalVideo } = useAgora();
+  const { configureRtm, toggleLocalAudio, toggleLocalVideo } = useAgora();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
 
@@ -183,19 +143,31 @@ const Controls: React.FC<ControlsProps> = ({ onEndCall }) => {
           ) as Record<string, unknown>;
           const sanitizedPayload = sanitizeCustomJoinPayload(parsed);
           customJoinPayload = sanitizedPayload
-            ? requireRtmCustomPayload(sanitizedPayload)
+            ? withCustomPayloadTranscriptTransport(
+                sanitizedPayload,
+                getTranscriptTransport(agentSettings),
+              )
             : undefined;
         } catch (error) {
           console.warn("Ignoring invalid custom agent payload", error);
         }
       }
 
-      const rtmAgentSettings = requireRtmSettings(agentSettings);
-      const result = await inviteAgent(channelId, localUID, rtmAgentSettings, {
+      const normalizedSettings = withTranscriptTransport(agentSettings);
+      const customAdvancedFeatures = customJoinPayload?.properties
+        .advanced_features as Record<string, unknown> | undefined;
+      const transport = customJoinPayload
+        ? customAdvancedFeatures?.enable_rtm === false
+          ? "rtc"
+          : "rtm"
+        : getTranscriptTransport(normalizedSettings);
+      await configureRtm(transport === "rtm");
+      const result = await inviteAgent(channelId, localUID, normalizedSettings, {
         useCustomPayload: Boolean(customJoinPayload),
         customJoinPayload,
         username: localUsername || undefined,
       });
+      useAppStore.getState().setTranscriptionMode(transport);
       setAgentActive(
         result.agentId,
         result.agentRtcUid || "0",
@@ -206,8 +178,6 @@ const Controls: React.FC<ControlsProps> = ({ onEndCall }) => {
         joinedAt: Date.now(),
         channelId,
       });
-
-      useAppStore.getState().setTranscriptionMode("rtm");
       showToast("AI agent joined the call", "success");
     } catch (error) {
       console.error("Unable to start the AI agent", error);
@@ -220,6 +190,7 @@ const Controls: React.FC<ControlsProps> = ({ onEndCall }) => {
   }, [
     agentSettings,
     channelId,
+    configureRtm,
     localUID,
     localUsername,
     setAgentActive,
@@ -248,10 +219,11 @@ const Controls: React.FC<ControlsProps> = ({ onEndCall }) => {
   const handleSaveAgentSettings = useCallback(
     async (settings: AgentSettings): Promise<void> => {
       const previousSettings = useAppStore.getState().agentSettings;
-      setAgentSettings(settings);
+      const normalizedSettings = withTranscriptTransport(settings);
+      setAgentSettings(normalizedSettings);
 
       try {
-        await persistAgentSettings(settings);
+        await persistAgentSettings(normalizedSettings);
       } catch (error) {
         console.error("Unable to persist agent settings", error);
       }
@@ -261,15 +233,15 @@ const Controls: React.FC<ControlsProps> = ({ onEndCall }) => {
         return;
       }
 
-      const canUpdate = hasUpdatableChanges(previousSettings, settings);
+      const canUpdate = hasUpdatableChanges(previousSettings, normalizedSettings);
       const needsRestart = hasRestartRequiredChanges(
         previousSettings,
-        settings,
+        normalizedSettings,
       );
       if (canUpdate) {
         setAgentUpdating(true);
         try {
-          await updateAgent(agentId, channelId, settings);
+          await updateAgent(agentId, channelId, normalizedSettings);
           showToast("Agent configuration updated", "success");
         } catch (error) {
           showToast(

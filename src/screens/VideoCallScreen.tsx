@@ -110,7 +110,11 @@ const VideoCallScreen: React.FC = () => {
           <p className="truncate text-sm font-semibold sm:text-base">
             Private agent call
           </p>
-          <p className="text-xs text-slate-400">Connected with Agora RTC + RTM</p>
+          <p className="text-xs text-slate-400">
+            {transcriptionMode === "rtm"
+              ? "Connected with Agora RTC + RTM"
+              : "Connected with Agora RTC"}
+          </p>
         </div>
 
         {isAgentActive && (

@@ -5,8 +5,6 @@ import {
   MdClose,
   MdSend,
   MdImage,
-  MdTextFields,
-  MdViewHeadline,
   MdTune,
   MdAutoAwesome,
   MdInfoOutline,
@@ -19,6 +17,7 @@ import type {
 } from "@/types/agora";
 import { ETurnStatus, ETranscriptRenderMode } from "@/types/agora";
 import { sendAgentInstruction } from "@/api/agentApi";
+import { TranscriptRenderModeControls } from "./TranscriptRenderModeControls";
 
 interface TranscriptSidePanelProps {
   isOpen: boolean;
@@ -341,41 +340,10 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
           <span className="text-xs text-gray-600 dark:text-gray-400">
             Render Mode:
           </span>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setTranscriptRenderMode(ETranscriptRenderMode.TEXT)}
-              className={`px-2 py-1 text-xs rounded transition-colors ${
-                transcriptRenderMode === ETranscriptRenderMode.TEXT
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
-              }`}
-              title="Text mode: Show full text at once"
-            >
-              <MdTextFields size={14} />
-            </button>
-            <button
-              onClick={() => setTranscriptRenderMode(ETranscriptRenderMode.WORD)}
-              className={`px-2 py-1 text-xs rounded transition-colors ${
-                transcriptRenderMode === ETranscriptRenderMode.WORD
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
-              }`}
-              title="Word mode: Animate word-by-word"
-            >
-              <MdViewHeadline size={14} />
-            </button>
-            <button
-              onClick={() => setTranscriptRenderMode(ETranscriptRenderMode.AUTO)}
-              className={`px-2 py-1 text-xs rounded transition-colors ${
-                transcriptRenderMode === ETranscriptRenderMode.AUTO
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
-              }`}
-              title="Auto mode: Detect automatically"
-            >
-              Auto
-            </button>
-          </div>
+          <TranscriptRenderModeControls
+            value={transcriptRenderMode}
+            onChange={setTranscriptRenderMode}
+          />
         </div>
 
         {/* Transcript Content */}

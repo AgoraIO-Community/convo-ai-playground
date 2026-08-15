@@ -53,7 +53,7 @@ type SettingsTab = "ai-agent" | "voice" | "mcp-server";
 interface SettingsSidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveAgentSettings: (settings: AgentSettings) => void;
+  onSaveAgentSettings: (settings: AgentSettings) => void | Promise<void>;
   isAgentUpdating?: boolean;
   isAgentActive?: boolean;
   /** When true, render as a bottom sheet (mobile). */
@@ -130,11 +130,11 @@ const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 
   const localUsername = useAppStore((state) => state.localUsername);
   const handleSaveAgentSettingsWithSync = React.useCallback(
-    (settings: AgentSettings) => {
-      onSaveAgentSettings(settings);
+    async (settings: AgentSettings) => {
+      await onSaveAgentSettings(settings);
       const json = buildJoinPayloadPreview(settings, localUsername);
       const toStore = getMaskedJsonToStore(json);
-      import("@/services/settingsDb").then((m) =>
+      await import("@/services/settingsDb").then((m) =>
         m.setCustomAgentSettings({
           useCustomPayload,
           customPayloadJson: toStore,
@@ -343,7 +343,7 @@ const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 
 // Extracted Agent Settings content (without the sidebar wrapper)
 interface AgentSettingsContentProps {
-  onSave: (settings: AgentSettings) => void;
+  onSave: (settings: AgentSettings) => void | Promise<void>;
   onClose: () => void;
   isAgentActive?: boolean;
   isDisabled?: boolean;
@@ -1979,12 +1979,12 @@ const BotIcon: React.FC<{ className?: string; size?: number }> = ({
 
 // Agent settings content component (embedded version)
 const AgentSettingsSidebarContent: React.FC<{
-  onSave: (settings: AgentSettingsType) => void;
+  onSave: (settings: AgentSettingsType) => void | Promise<void>;
   onClose: () => void;
   isAgentActive?: boolean;
   isDisabled?: boolean;
 }> = ({
-  onSave: _onSave,
+  onSave,
   onClose,
   isAgentActive = false,
   isDisabled = false,
@@ -2258,11 +2258,8 @@ const AgentSettingsSidebarContent: React.FC<{
         return;
       }
     }
-    await import("@/services/settingsDb").then((m) =>
-      m.setAgentSettings(settings),
-    );
-    showToast("Agent settings saved to storage.", "success");
-  }, [settings]);
+    await onSave(settings);
+  }, [onSave, settings]);
 
   // Reset: reload settings from IndexedDB
   const handleReset = React.useCallback(async () => {

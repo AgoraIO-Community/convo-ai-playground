@@ -13,6 +13,10 @@ import type {
 import { EAgentState, ETranscriptRenderMode } from "@/types/agora";
 import type { AgentSessionRecord } from "@/types/agentTurns";
 import {
+  getTranscriptTransport,
+  withTranscriptTransport,
+} from "@/lib/agora/transcriptTransport";
+import {
   loadAgentSessionHistory,
   MAX_AGENT_SESSION_RECORDS,
   saveAgentSessionHistory,
@@ -243,18 +247,13 @@ const useAppStore = create<AppState>((set) => ({
   setAgentUpdating: (isAgentUpdating) => set({ isAgentUpdating }),
   clearAgent: () => set(INITIAL_AGENT_STATE),
   setAgentSettings: (agentSettings) => {
-    const rtmAgentSettings: AgentSettings = {
-      ...agentSettings,
-      advanced_features: {
-        ...agentSettings.advanced_features,
-        enable_rtm: true,
-      },
-      parameters: {
-        ...agentSettings.parameters,
-        data_channel: "rtm",
-      },
-    };
-    set({ agentSettings: rtmAgentSettings, transcriptionMode: "rtm" });
+    const normalizedSettings = withTranscriptTransport(agentSettings);
+    set((state) => ({
+      agentSettings: normalizedSettings,
+      transcriptionMode: state.isAgentActive
+        ? state.transcriptionMode
+        : getTranscriptTransport(normalizedSettings),
+    }));
   },
   setAgentState: (agentState) =>
     set({

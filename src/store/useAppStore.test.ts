@@ -42,7 +42,7 @@ describe("call state", () => {
     expect(state.localVideoTrack).toBeNull();
   });
 
-  it("keeps RTM enabled when legacy settings are loaded or edited", () => {
+  it("preserves RTC transcript delivery when RTM is disabled", () => {
     useAppStore.getState().setAgentSettings({
       name: "legacy-agent",
       advanced_features: { enable_rtm: false },
@@ -50,8 +50,8 @@ describe("call state", () => {
     } as AgentSettings);
 
     const state = useAppStore.getState();
-    expect(state.agentSettings?.advanced_features?.enable_rtm).toBe(true);
-    expect(state.agentSettings?.parameters?.data_channel).toBe("rtm");
-    expect(state.transcriptionMode).toBe("rtm");
+    expect(state.agentSettings?.advanced_features?.enable_rtm).toBe(false);
+    expect(state.agentSettings?.parameters?.data_channel).toBe("rtc");
+    expect(state.transcriptionMode).toBe("rtc");
   });
 });

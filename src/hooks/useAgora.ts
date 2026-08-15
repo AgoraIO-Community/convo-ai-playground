@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import AgoraRTC from "agora-rtc-sdk-ng";
 import type {
   IAgoraRTCClient,
@@ -8,22 +8,54 @@ import type {
   ILocalAudioTrack,
   ILocalVideoTrack,
 } from "agora-rtc-sdk-ng";
-import AgoraRTM from "agora-rtm-sdk";
+import AgoraRTM from "agora-rtm";
 import { stopAgent } from "@/api/agentApi";
 import { releaseAgoraTrack } from "@/hooks/agoraTrackLifecycle";
 import useAppStore from "@/store/useAppStore";
 import type { RtcSessionResponse } from "@/types/rtcSession";
 
 let rtcClient: IAgoraRTCClient | null = null;
-let rtmClient: InstanceType<typeof AgoraRTM.RTM> | null = null;
+type RtmClient = InstanceType<typeof AgoraRTM.RTM>;
+
+let rtmClient: RtmClient | null = null;
 let rtmChannelName: string | null = null;
+let activeSession: RtcSessionResponse | null = null;
+let rtmLifecyclePromise: Promise<void> = Promise.resolve();
+const rtmClientListeners = new Set<() => void>();
 let localAudioTrack: ILocalAudioTrack | null = null;
 let localVideoTrack: ILocalVideoTrack | null = null;
 let rtcListenersAttached = false;
 let leavePromise: Promise<void> | null = null;
 
+function emitRtmClientChange(): void {
+  for (const listener of rtmClientListeners) listener();
+}
+
+function setRtmClient(nextClient: RtmClient | null): void {
+  if (rtmClient === nextClient) return;
+  rtmClient = nextClient;
+  emitRtmClientChange();
+}
+
+function subscribeToRtmClient(listener: () => void): () => void {
+  rtmClientListeners.add(listener);
+  return () => rtmClientListeners.delete(listener);
+}
+
+function getRtmClientSnapshot(): RtmClient | null {
+  return rtmClient;
+}
+
+interface AgoraRTCWithInternalParameters {
+  setParameter(key: "ENABLE_AUDIO_PTS_METADATA", value: boolean): void;
+}
+
 function getRtcClient(): IAgoraRTCClient {
   if (!rtcClient) {
+    (AgoraRTC as unknown as AgoraRTCWithInternalParameters).setParameter(
+      "ENABLE_AUDIO_PTS_METADATA",
+      true,
+    );
     rtcClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
   }
   return rtcClient;
@@ -91,9 +123,14 @@ async function cleanupAgoraConnections(): Promise<void> {
     }
   }
 
+  await disconnectRtmClient();
+  activeSession = null;
+}
+
+async function disconnectRtmClient(): Promise<void> {
   if (rtmClient) {
     const client = rtmClient;
-    rtmClient = null;
+    setRtmClient(null);
     try {
       if (rtmChannelName) await client.unsubscribe(rtmChannelName);
     } catch (error) {
@@ -110,12 +147,70 @@ async function cleanupAgoraConnections(): Promise<void> {
   rtmChannelName = null;
 }
 
+async function connectRtmClient(session: RtcSessionResponse): Promise<RtmClient> {
+  if (rtmClient) return rtmClient;
+
+  const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID;
+  if (!appId) throw new Error("Agora App ID is not configured");
+
+  const client = new AgoraRTM.RTM(appId, session.rtmUserId, {
+    useStringUserId: true,
+  });
+  try {
+    await client.login({ token: session.rtmToken });
+    await client.subscribe(session.channelName, {
+      withMessage: true,
+      withPresence: true,
+      withMetadata: false,
+      withLock: false,
+    });
+  } catch (error) {
+    try {
+      client.removeAllListeners();
+      await client.logout();
+    } catch {
+      // Preserve the original connection error.
+    }
+    throw error;
+  }
+
+  rtmChannelName = session.channelName;
+  setRtmClient(client);
+  return client;
+}
+
+async function configureRtmConnection(enabled: boolean): Promise<RtmClient | null> {
+  let result: RtmClient | null = null;
+  const operation = rtmLifecyclePromise.then(async () => {
+    if (enabled) {
+      if (!activeSession) {
+        throw new Error("Cannot enable RTM before the RTC session is ready");
+      }
+      result = await connectRtmClient(activeSession);
+    } else {
+      await disconnectRtmClient();
+      result = null;
+    }
+  });
+  rtmLifecyclePromise = operation.then(
+    () => undefined,
+    () => undefined,
+  );
+  await operation;
+  return result;
+}
+
 export const useAgora = () => {
   const localAudioTrackState = useAppStore((state) => state.localAudioTrack);
   const localVideoTrackState = useAppStore((state) => state.localVideoTrack);
   const agentAvatarRtcUid = useAppStore((state) => state.agentAvatarRtcUid);
   const avatarVideoTrack = useAppStore(
     (state) => state.agentAvatarVideoTrack,
+  );
+  const reactiveRtmClient = useSyncExternalStore(
+    subscribeToRtmClient,
+    getRtmClientSnapshot,
+    () => null,
   );
 
   useEffect(() => {
@@ -132,7 +227,10 @@ export const useAgora = () => {
   }, [agentAvatarRtcUid]);
 
   const joinMeeting = useCallback(
-    async (session: RtcSessionResponse): Promise<void> => {
+    async (
+      session: RtcSessionResponse,
+      enableRtm: boolean = true,
+    ): Promise<void> => {
       const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID;
       if (!appId) {
         throw new Error("Agora App ID is not configured");
@@ -140,6 +238,7 @@ export const useAgora = () => {
 
       await cleanupAgoraConnections();
       ensureRtcListeners();
+      activeSession = session;
 
       try {
         const microphoneId = useAppStore.getState().selectedMicrophoneId;
@@ -151,17 +250,7 @@ export const useAgora = () => {
           .getState()
           .setLocalTracks(localAudioTrack, localVideoTrack);
 
-        rtmClient = new AgoraRTM.RTM(appId, session.rtmUserId, {
-          useStringUserId: true,
-        });
-        rtmChannelName = session.channelName;
-        await rtmClient.login({ token: session.rtmToken });
-        await rtmClient.subscribe(session.channelName, {
-          withMessage: true,
-          withPresence: true,
-          withMetadata: false,
-          withLock: false,
-        });
+        await configureRtmConnection(enableRtm);
 
         const client = getRtcClient();
         await client.join(
@@ -207,6 +296,12 @@ export const useAgora = () => {
     return leavePromise;
   }, []);
 
+  const configureRtm = useCallback(
+    (enabled: boolean): Promise<RtmClient | null> =>
+      configureRtmConnection(enabled),
+    [],
+  );
+
   const toggleLocalAudio = useCallback(async (): Promise<void> => {
     const state = useAppStore.getState();
     if (state.audioMuted) {
@@ -243,6 +338,7 @@ export const useAgora = () => {
 
   return {
     joinMeeting,
+    configureRtm,
     leaveCall,
     toggleLocalAudio,
     toggleLocalVideo,
@@ -252,6 +348,6 @@ export const useAgora = () => {
     },
     avatarVideoTrack,
     rtcClient: getRtcClient(),
-    rtmClient,
+    rtmClient: reactiveRtmClient,
   };
 };

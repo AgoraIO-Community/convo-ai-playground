@@ -5,6 +5,7 @@ import { signOut } from "next-auth/react";
 import { createRtcSession } from "@/api/agoraApi";
 import MeetingLoadingSkeleton from "@/components/MeetingLoadingSkeleton";
 import { useAgora } from "@/hooks/useAgora";
+import { getTranscriptTransport } from "@/lib/agora/transcriptTransport";
 import useAppStore from "@/store/useAppStore";
 import VideoCallScreen from "@/screens/VideoCallScreen";
 
@@ -13,6 +14,7 @@ type BootstrapStatus = "joining" | "active" | "error";
 const CallBootstrapScreen: React.FC = () => {
   const callActive = useAppStore((state) => state.callActive);
   const callStart = useAppStore((state) => state.callStart);
+  const agentSettings = useAppStore((state) => state.agentSettings);
   const { joinMeeting } = useAgora();
   const hasStartedRef = useRef(false);
   const [attempt, setAttempt] = useState(0);
@@ -27,6 +29,8 @@ const CallBootstrapScreen: React.FC = () => {
       return;
     }
 
+    if (!agentSettings) return;
+
     if (hasStartedRef.current) return;
     hasStartedRef.current = true;
 
@@ -36,7 +40,10 @@ const CallBootstrapScreen: React.FC = () => {
 
       try {
         const session = await createRtcSession();
-        await joinMeeting(session);
+        await joinMeeting(
+          session,
+          getTranscriptTransport(agentSettings) === "rtm",
+        );
         callStart({
           displayName: session.displayName,
           rtcUid: String(session.rtcUid),
@@ -53,7 +60,7 @@ const CallBootstrapScreen: React.FC = () => {
     };
 
     void bootstrap();
-  }, [attempt, callActive, callStart, joinMeeting]);
+  }, [agentSettings, attempt, callActive, callStart, joinMeeting]);
 
   const handleRetry = useCallback((): void => {
     hasStartedRef.current = false;

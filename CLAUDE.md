@@ -5,7 +5,7 @@ A private user-to-agent calling application. Google-authenticated users launch d
 
 ## Tech Stack
 - **Framework:** Next.js 15 + React 19 + TypeScript 5.8
-- **Agora SDKs:** agora-rtc-sdk-ng (media), agora-rtm-sdk (transcript/chat), agora-token (server token generation)
+- **Agora SDKs:** agora-rtc-sdk-ng (media), agora-rtm (signaling/chat), agora-agent-client-toolkit (transcripts), agora-token (server token generation)
 - **State:** Zustand 5
 - **Routing/Auth:** Next.js App Router + NextAuth
 - **Styling:** TailwindCSS 4 with dark mode (class strategy)

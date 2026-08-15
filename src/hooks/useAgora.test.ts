@@ -1,4 +1,4 @@
-import { renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RtcSessionResponse } from "@/types/rtcSession";
 
@@ -50,7 +50,13 @@ const mocks = vi.hoisted(() => {
     rtmClient,
     nativeAudioStop,
     nativeVideoStop,
-    createClient: vi.fn(() => rtcClient),
+    setParameter: vi.fn((key: string, value: boolean) => {
+      order.push(`set-parameter:${key}:${value}`);
+    }),
+    createClient: vi.fn(() => {
+      order.push("create-client");
+      return rtcClient;
+    }),
     createMicrophoneAudioTrack: vi.fn(async () => {
       order.push("microphone");
       return audioTrack;
@@ -67,13 +73,14 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("agora-rtc-sdk-ng", () => ({
   default: {
+    setParameter: mocks.setParameter,
     createClient: mocks.createClient,
     createMicrophoneAudioTrack: mocks.createMicrophoneAudioTrack,
     createCameraVideoTrack: mocks.createCameraVideoTrack,
   },
 }));
 
-vi.mock("agora-rtm-sdk", () => ({
+vi.mock("agora-rtm", () => ({
   default: { RTM: mocks.RtmConstructor },
 }));
 
@@ -91,6 +98,7 @@ const session: RtcSessionResponse = {
 
 describe("useAgora direct session", () => {
   beforeEach(() => {
+    vi.resetModules();
     process.env.NEXT_PUBLIC_AGORA_APP_ID = "test-app-id";
     vi.clearAllMocks();
     mocks.order.length = 0;
@@ -100,11 +108,26 @@ describe("useAgora direct session", () => {
     });
   });
 
+  it("enables audio PTS metadata before creating the RTC client", async () => {
+    const { useAgora } = await import("./useAgora");
+    const { result } = renderHook(() => useAgora());
+
+    await result.current.joinMeeting(session, true);
+
+    expect(mocks.setParameter).toHaveBeenCalledWith(
+      "ENABLE_AUDIO_PTS_METADATA",
+      true,
+    );
+    expect(
+      mocks.order.indexOf("set-parameter:ENABLE_AUDIO_PTS_METADATA:true"),
+    ).toBeLessThan(mocks.order.indexOf("create-client"));
+  });
+
   it("uses one identity and channel for RTM and RTC, then publishes", async () => {
     const { useAgora } = await import("./useAgora");
     const { result } = renderHook(() => useAgora());
 
-    await result.current.joinMeeting(session);
+    await result.current.joinMeeting(session, true);
 
     expect(mocks.RtmConstructor).toHaveBeenCalledWith("test-app-id", "42", {
       useStringUserId: true,
@@ -123,6 +146,8 @@ describe("useAgora direct session", () => {
       42,
     );
     expect(mocks.order).toEqual([
+      "set-parameter:ENABLE_AUDIO_PTS_METADATA:true",
+      "create-client",
       "microphone",
       "camera",
       "rtm-login",
@@ -132,12 +157,51 @@ describe("useAgora direct session", () => {
     ]);
   });
 
+  it("joins and publishes RTC without creating RTM when it is disabled", async () => {
+    const { useAgora } = await import("./useAgora");
+    const { result } = renderHook(() => useAgora());
+
+    await act(async () => {
+      await result.current.joinMeeting(session, false);
+    });
+
+    expect(mocks.RtmConstructor).not.toHaveBeenCalled();
+    expect(mocks.rtcClient.join).toHaveBeenCalledOnce();
+    expect(mocks.rtcClient.publish).toHaveBeenCalledOnce();
+    expect(result.current.rtmClient).toBeNull();
+  });
+
+  it("connects and disconnects RTM for the active RTC session", async () => {
+    const { useAgora } = await import("./useAgora");
+    const { result } = renderHook(() => useAgora());
+
+    await act(async () => {
+      await result.current.joinMeeting(session, false);
+      await result.current.configureRtm(true);
+    });
+
+    await waitFor(() => expect(result.current.rtmClient).toBe(mocks.rtmClient));
+    expect(mocks.rtmClient.login).toHaveBeenCalledWith({ token: "rtm-token" });
+    expect(mocks.rtmClient.subscribe).toHaveBeenCalledWith(
+      "channel-private",
+      expect.objectContaining({ withMessage: true, withPresence: true }),
+    );
+
+    await act(async () => {
+      await result.current.configureRtm(false);
+    });
+
+    await waitFor(() => expect(result.current.rtmClient).toBeNull());
+    expect(mocks.rtmClient.unsubscribe).toHaveBeenCalledWith("channel-private");
+    expect(mocks.rtmClient.logout).toHaveBeenCalled();
+  });
+
   it("releases partially initialized resources when RTC joining fails", async () => {
     mocks.rtcClient.join.mockRejectedValueOnce(new Error("RTC rejected"));
     const { useAgora } = await import("./useAgora");
     const { result } = renderHook(() => useAgora());
 
-    await expect(result.current.joinMeeting(session)).rejects.toThrow(
+    await expect(result.current.joinMeeting(session, true)).rejects.toThrow(
       "RTC rejected",
     );
 

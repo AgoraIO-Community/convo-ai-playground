@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   joinMeeting: vi.fn(),
   callStart: vi.fn(),
   signOut: vi.fn(),
+  storeState: {
+    callActive: false,
+    callStart: vi.fn(),
+    agentSettings: { advanced_features: { enable_rtm: false } },
+  },
 }));
 
 vi.mock("@/api/agoraApi", () => ({
@@ -20,7 +25,7 @@ vi.mock("@/hooks/useAgora", () => ({
 
 vi.mock("@/store/useAppStore", () => ({
   default: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ callActive: false, callStart: mocks.callStart }),
+    selector(mocks.storeState),
 }));
 
 vi.mock("next-auth/react", () => ({
@@ -49,6 +54,10 @@ describe("CallBootstrapScreen", () => {
     mocks.joinMeeting.mockReset();
     mocks.callStart.mockReset();
     mocks.signOut.mockReset();
+    mocks.storeState.callStart = mocks.callStart;
+    mocks.storeState.agentSettings = {
+      advanced_features: { enable_rtm: false },
+    };
     mocks.createRtcSession.mockResolvedValue(rtcSession);
     mocks.joinMeeting.mockResolvedValue(undefined);
   });
@@ -64,13 +73,24 @@ describe("CallBootstrapScreen", () => {
 
     await waitFor(() => expect(mocks.joinMeeting).toHaveBeenCalledTimes(1));
     expect(mocks.createRtcSession).toHaveBeenCalledTimes(1);
-    expect(mocks.joinMeeting).toHaveBeenCalledWith(rtcSession);
+    expect(mocks.joinMeeting).toHaveBeenCalledWith(rtcSession, false);
     expect(mocks.callStart).toHaveBeenCalledWith({
       displayName: "Ada Lovelace",
       rtcUid: "42",
       channelName: "channel-123",
       startedAt: expect.any(Number),
     });
+  });
+
+  it("enables RTM during call bootstrap when the persisted setting uses it", async () => {
+    mocks.storeState.agentSettings = {
+      advanced_features: { enable_rtm: true },
+    };
+
+    render(React.createElement(CallBootstrapScreen));
+
+    await waitFor(() => expect(mocks.joinMeeting).toHaveBeenCalledTimes(1));
+    expect(mocks.joinMeeting).toHaveBeenCalledWith(rtcSession, true);
   });
 
   it("shows a retry action and creates a fresh session after failure", async () => {
