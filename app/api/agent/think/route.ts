@@ -46,15 +46,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const payload: Record<string, unknown> = { text: options.text.trim() };
-    if (options.on_listening_action)
-      payload.on_listening_action = options.on_listening_action;
-    if (options.on_thinking_action)
-      payload.on_thinking_action = options.on_thinking_action;
-    if (options.on_speaking_action)
-      payload.on_speaking_action = options.on_speaking_action;
-    if (typeof options.interruptable === "boolean")
-      payload.interruptable = options.interruptable;
+    const payload: Record<string, unknown> = {
+      text: options.text.trim(),
+      on_listening_action: options.on_listening_action ?? "interrupt",
+      on_thinking_action: options.on_thinking_action ?? "interrupt",
+      on_speaking_action: options.on_speaking_action ?? "ignore",
+      interruptable: options.interruptable ?? true,
+    };
     if (options.metadata && Object.keys(options.metadata).length > 0)
       payload.metadata = options.metadata;
 

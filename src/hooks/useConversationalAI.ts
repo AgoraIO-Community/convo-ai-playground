@@ -38,6 +38,12 @@ export const useConversationalAI = ({
     (state) => state.setCurrentInProgressMessage,
   );
   const addUserSentMessage = useAppStore((state) => state.addUserSentMessage);
+  const addLiveAgentMetric = useAppStore((state) => state.addLiveAgentMetric);
+  const addLiveAgentError = useAppStore((state) => state.addLiveAgentError);
+  const addLiveMessageError = useAppStore((state) => state.addLiveMessageError);
+  const addManualTurnResult = useAppStore(
+    (state) => state.addManualTurnResult,
+  );
   const localUID = useAppStore((state) => state.localUID);
   const transcriptRenderMode = useAppStore(
     (state) => state.transcriptRenderMode,
@@ -81,6 +87,18 @@ export const useConversationalAI = ({
           },
           onAgentState: (state) => {
             if (!cancelled) setAgentState(state);
+          },
+          onAgentMetric: (event) => {
+            if (!cancelled) addLiveAgentMetric(event);
+          },
+          onAgentError: (event) => {
+            if (!cancelled) addLiveAgentError(event);
+          },
+          onMessageError: (event) => {
+            if (!cancelled) addLiveMessageError(event);
+          },
+          onManualTurnResult: (event) => {
+            if (!cancelled) addManualTurnResult(event);
           },
         });
 
@@ -127,6 +145,10 @@ export const useConversationalAI = ({
     setTranscriptItems,
     setCurrentInProgressMessage,
     setAgentState,
+    addLiveAgentMetric,
+    addLiveAgentError,
+    addLiveMessageError,
+    addManualTurnResult,
   ]);
 
   useEffect(() => {
@@ -199,5 +221,21 @@ export const useConversationalAI = ({
     [agentRtcUid, transcriptionMode, addUserSentMessage],
   );
 
-  return { sendChatMessage };
+  const manualSOS = useCallback(async (): Promise<string> => {
+    const session = sessionRef.current;
+    if (!session || !agentRtcUid || transcriptionMode !== "rtm") {
+      throw new Error("Manual start of speech requires an active RTM agent session.");
+    }
+    return session.manualSOS(agentRtcUid);
+  }, [agentRtcUid, transcriptionMode]);
+
+  const manualEOS = useCallback(async (): Promise<string> => {
+    const session = sessionRef.current;
+    if (!session || !agentRtcUid || transcriptionMode !== "rtm") {
+      throw new Error("Manual end of speech requires an active RTM agent session.");
+    }
+    return session.manualEOS(agentRtcUid);
+  }, [agentRtcUid, transcriptionMode]);
+
+  return { sendChatMessage, manualSOS, manualEOS };
 };

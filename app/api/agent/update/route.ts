@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { RtcTokenBuilder, RtcRole } from "agora-token";
 import type { AgentSettings } from "@/types/agora";
+import { migrateAgentSettings } from "@/lib/agora/engineConfig";
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE!;
@@ -47,7 +48,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { llm, advanced_features } = agentSettings;
+    const currentSettings = migrateAgentSettings(agentSettings);
+    const { llm, mllm, advanced_features } = currentSettings;
 
     // Regenerate token (may change if RTM is toggled)
     const agentUid = 0;
@@ -90,16 +92,16 @@ export async function POST(request: NextRequest) {
       token: agentRtcToken,
     };
 
-    if (Object.keys(llmPayload).length > 0) {
+    if (mllm?.enable !== true && Object.keys(llmPayload).length > 0) {
       propertiesPayload.llm = llmPayload;
     }
 
     if (
-      advanced_features?.enable_mllm &&
-      llm.params &&
-      typeof llm.params === "object"
+      mllm?.enable === true &&
+      mllm.params &&
+      typeof mllm.params === "object"
     ) {
-      propertiesPayload.mllm = { params: llm.params };
+      propertiesPayload.mllm = { params: mllm.params };
     }
 
     const updatePayload = {

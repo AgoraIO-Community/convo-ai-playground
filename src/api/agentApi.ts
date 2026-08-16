@@ -109,10 +109,12 @@ export async function queryAgent(
  */
 export async function queryAgentTurns(
   agentId: string,
+  options: { cursor?: string; limit?: number } = {},
 ): Promise<AgentTurnsResponse> {
-  const response = await fetch(
-    `/api/agent/turns?agentId=${encodeURIComponent(agentId)}`,
-  );
+  const search = new URLSearchParams({ agentId });
+  if (options.cursor) search.set("cursor", options.cursor);
+  if (options.limit !== undefined) search.set("limit", String(options.limit));
+  const response = await fetch(`/api/agent/turns?${search.toString()}`);
 
   if (!response.ok) {
     const errorData = (await response.json().catch(() => ({}))) as {
@@ -130,8 +132,8 @@ export async function queryAgentTurns(
  * Sends a custom text instruction to a running agent (v2.6).
  * Uses POST /v2/projects/{appid}/agents/{agentId}/think.
  *
- * Defaults match the Agora docs:
- *   on_listening_action: "inject"
+ * Defaults are sent explicitly so future engine default changes do not alter behavior:
+ *   on_listening_action: "interrupt"
  *   on_thinking_action: "interrupt"
  *   on_speaking_action: "ignore"
  *   interruptable: true

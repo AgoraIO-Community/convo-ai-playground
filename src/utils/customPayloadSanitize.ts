@@ -3,6 +3,8 @@
  * Never pass unsanitized user JSON to the server.
  */
 
+import { migrateAgentSettings } from "@/lib/agora/engineConfig";
+
 const DANGEROUS_PATTERNS = [
   /<script\b/i,
   /javascript:/i,
@@ -29,6 +31,7 @@ const ALLOWED_PROPERTY_KEYS = new Set([
   "tts",
   "asr",
   "turn_detection",
+  "interruption",
   "advanced_features",
   "parameters",
   "avatar",
@@ -85,8 +88,12 @@ export function sanitizeCustomJoinPayload(
   }
 
   stripV25DeprecatedJoinFields(allowedProps);
+  const migrated = migrateAgentSettings({ name, ...allowedProps }) as unknown as
+    Record<string, unknown>;
+  delete migrated.name;
+  delete migrated.schemaVersion;
 
-  return { name, properties: allowedProps };
+  return { name, properties: migrated };
 }
 
 /** v2.5 removed these fields from Start agent; strip if present in custom JSON. */

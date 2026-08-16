@@ -46,7 +46,7 @@ const VideoCallScreen: React.FC = () => {
     rtcClient,
     rtmClient,
   } = useAgora();
-  const { sendChatMessage } = useConversationalAI({
+  const { sendChatMessage, manualSOS, manualEOS } = useConversationalAI({
     rtcClient,
     rtmClient,
     channelId,
@@ -180,7 +180,29 @@ const VideoCallScreen: React.FC = () => {
         </main>
       </div>
 
-      <Controls onEndCall={handleEndCall} />
+      <Controls
+        onEndCall={handleEndCall}
+        manualTurnControls={
+          isAgentActive &&
+          transcriptionMode === "rtm" &&
+          agentSettings?.enable_turn_detection === true &&
+          (agentSettings.turn_detection?.config?.start_of_speech?.mode ===
+            "manual" ||
+            agentSettings.turn_detection?.config?.end_of_speech?.mode ===
+              "manual")
+            ? {
+                ...(agentSettings.turn_detection.config?.start_of_speech
+                  ?.mode === "manual"
+                  ? { onStart: manualSOS }
+                  : {}),
+                ...(agentSettings.turn_detection.config?.end_of_speech?.mode ===
+                "manual"
+                  ? { onEnd: manualEOS }
+                  : {}),
+              }
+            : undefined
+        }
+      />
 
       <BottomSheet
         isOpen={isTranscriptOpen}

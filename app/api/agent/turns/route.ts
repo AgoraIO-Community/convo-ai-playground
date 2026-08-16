@@ -7,10 +7,22 @@ const CUSTOMER_SECRET = process.env.AGORA_CUSTOMER_SECRET!;
 export async function GET(request: NextRequest) {
   try {
     const agentId = request.nextUrl.searchParams.get("agentId");
+    const cursor = request.nextUrl.searchParams.get("cursor");
+    const rawLimit = request.nextUrl.searchParams.get("limit");
 
     if (!agentId) {
       return NextResponse.json(
         { error: "agentId query parameter is required" },
+        { status: 400 },
+      );
+    }
+    const limit = rawLimit == null ? undefined : Number(rawLimit);
+    if (
+      limit !== undefined &&
+      (!Number.isInteger(limit) || limit < 1 || limit > 100)
+    ) {
+      return NextResponse.json(
+        { error: "limit must be an integer between 1 and 100" },
         { status: 400 },
       );
     }
@@ -29,10 +41,14 @@ export async function GET(request: NextRequest) {
       `${CUSTOMER_ID}:${CUSTOMER_SECRET}`,
     ).toString("base64");
 
-    const agoraTurnsUrl = `https://api.agora.io/api/conversational-ai-agent/v2/projects/${encodeURIComponent(APP_ID)}/agents/${encodeURIComponent(agentId)}/turns`;
-    console.log("[Agent turns] Agora Conversational AI GET:", agoraTurnsUrl);
+    const agoraTurnsUrl = new URL(
+      `https://api.agora.io/api/conversational-ai-agent/v2/projects/${encodeURIComponent(APP_ID)}/agents/${encodeURIComponent(agentId)}/turns`,
+    );
+    if (cursor) agoraTurnsUrl.searchParams.set("cursor", cursor);
+    if (limit !== undefined) agoraTurnsUrl.searchParams.set("limit", String(limit));
+    console.log("[Agent turns] Agora Conversational AI GET:", agoraTurnsUrl.toString());
 
-    const agoraResponse = await fetch(agoraTurnsUrl, {
+    const agoraResponse = await fetch(agoraTurnsUrl.toString(), {
       method: "GET",
       headers: {
         Authorization: `Basic ${authHeader}`,

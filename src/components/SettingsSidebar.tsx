@@ -47,6 +47,21 @@ import type {
   AgentSessionRecord,
   AgentTurnsResponse,
 } from "@/types/agentTurns";
+import {
+  buildMaskedJoinPreview,
+  validateAgentSettings,
+} from "@/lib/agora/joinPayload";
+import {
+  DEFAULT_MANAGED_MINIMAX_VOICE_ID,
+  MANAGED_ASR_PROVIDERS,
+  MANAGED_LLM_PROVIDERS,
+  MANAGED_MINIMAX_VOICES,
+  MANAGED_TTS_PROVIDERS,
+  normalizeManagedASR,
+  normalizeManagedLLM,
+  normalizeManagedTTS,
+  type ManagedTTSVendor,
+} from "@/lib/agora/managedProviders";
 
 type SettingsTab = "ai-agent" | "voice" | "mcp-server";
 
@@ -374,6 +389,7 @@ import {
   ASRVendor,
   AvatarVendor,
   LLMConfig,
+  MllmConfig,
   TTSConfig,
   ASRConfig,
   AvatarConfig,
@@ -398,7 +414,14 @@ import {
 } from "react-icons/md";
 
 // Section collapse state
-type SectionKey = "llm" | "tts" | "asr" | "avatar" | "debug" | "advanced";
+type SectionKey =
+  | "llm"
+  | "mllm"
+  | "tts"
+  | "asr"
+  | "avatar"
+  | "debug"
+  | "advanced";
 
 // Environment variable helpers (no API keys here; server injects them from server-only env vars)
 const ENV_MAP: Record<string, string | undefined> = {
@@ -453,20 +476,16 @@ const keyChange = (
 
 const getDefaultTTSVendor = (): TTSVendor => {
   const vendor = getEnvVar("TTS_VENDOR", "microsoft");
-  if (
-    vendor === "elevenlabs" ||
-    vendor === "openai" ||
-    vendor === "microsoft"
-  ) {
-    return vendor;
+  if (vendor in TTS_PRESETS && vendor !== "fish_audio" && vendor !== "polly") {
+    return vendor as TTSVendor;
   }
   return "microsoft";
 };
 
 const getDefaultASRVendor = (): ASRVendor => {
   const vendor = getEnvVar("ASR_VENDOR", "ares");
-  if (vendor === "deepgram" || vendor === "microsoft" || vendor === "ares") {
-    return vendor;
+  if (vendor in ASR_PRESETS && vendor !== "transcribe") {
+    return vendor as ASRVendor;
   }
   return "ares";
 };
@@ -491,8 +510,9 @@ const getDefaultTTSParams = (vendor: TTSVendor): Record<string, unknown> => {
         voice: getEnvVar("OPENAI_TTS_VOICE", "alloy"),
         speed: 1.0,
       };
+    case "generic_http":
+      return {};
     case "microsoft":
-    default:
       return {
         key: "",
         region: getEnvVar("MICROSOFT_TTS_REGION", "eastus"),
@@ -503,6 +523,8 @@ const getDefaultTTSParams = (vendor: TTSVendor): Record<string, unknown> => {
         speed: 1.0,
         volume: 100,
       };
+    default:
+      return { key: "" };
   }
 };
 
@@ -531,10 +553,15 @@ const getDefaultASRConfig = (vendor: ASRVendor): ASRConfig => {
         },
       };
     case "ares":
-    default:
       return {
         vendor: "ares",
         language,
+      };
+    default:
+      return {
+        vendor,
+        language,
+        params: { key: "" },
       };
   }
 };
@@ -614,6 +641,8 @@ export const getDefaultSettings = (): AgentSettingsType => {
   return {
     name: `agent-${Date.now()}`,
     llm: {
+      credential_mode: "byok",
+      vendor: "custom",
       url: getEnvVar("LLM_URL", LLM_PRESETS.openai.url!),
       api_key: "",
       system_messages: [
@@ -636,17 +665,18 @@ export const getDefaultSettings = (): AgentSettingsType => {
         {
           name: "Weather",
           endpoint: "https://mcp-weather-server-5jkm.onrender.com/mcp",
-          transport: "http",
+          transport: "streamable_http",
           timeout_ms: 10000,
           enabled: false,
         },
       ],
     },
     tts: {
+      credential_mode: "byok",
       vendor: ttsVendor,
       params: getDefaultTTSParams(ttsVendor),
     },
-    asr: getDefaultASRConfig(asrVendor),
+    asr: { credential_mode: "byok", ...getDefaultASRConfig(asrVendor) },
     idle_timeout: 0,
     enable_turn_detection: false,
     turn_detection: {
@@ -689,7 +719,23 @@ export const getDefaultSettings = (): AgentSettingsType => {
       enable_sal: false,
       enable_rtm: false,
       enable_tools: false,
-      enable_mllm: false,
+    },
+    parameters: {
+      data_channel: "datastream",
+      enable_metrics: false,
+      enable_error_message: false,
+      audio_scenario: "default",
+      opt_out: false,
+      silence_config: { action: "speak", timeout_ms: 0 },
+      farewell_config: {
+        graceful_enabled: false,
+        graceful_timeout_seconds: 30,
+      },
+    },
+    interruption: {
+      enable: true,
+      mode: "start_of_speech",
+      disabled_config: { strategy: "append" },
     },
     avatar: {
       enable: false,
@@ -699,23 +745,14 @@ export const getDefaultSettings = (): AgentSettingsType => {
   };
 };
 
-/**
- * The active settings editor configures the cascade pipeline. Remove stale
- * MLLM state left by older settings screens so a later join cannot send both.
- * Explicit MLLM remains available through the custom payload flow.
- */
 function normalizeForActiveSettings(
   settings: AgentSettingsType,
 ): AgentSettingsType {
-  const cascadeSettings = { ...settings };
-  delete cascadeSettings.mllm;
-  return {
-    ...cascadeSettings,
-    advanced_features: {
-      ...cascadeSettings.advanced_features,
-      enable_mllm: false,
-    },
-  };
+  return settings;
+}
+
+function cloneSettingsBlock<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 // Styled components for the form
@@ -1634,57 +1671,22 @@ function buildJoinPayloadPreview(
       2,
     );
   }
-  const useMllm = Boolean(
-    settings.advanced_features?.enable_mllm && settings.mllm,
-  );
-  const props: Record<string, unknown> = {
-    channel: "<set by server>",
-    token: "<set by server>",
-    agent_rtc_uid: "0",
-    remote_rtc_uids: ["<uid>"],
-    enable_string_uid: false,
-    idle_timeout: settings.idle_timeout ?? 30,
-    ...(useMllm
-      ? { mllm: settings.mllm }
-      : {
-          llm: settings.llm
-            ? {
-                ...settings.llm,
-                api_key:
-                  settings.llm.api_key && settings.llm.api_key.trim()
-                    ? JOIN_PAYLOAD_MASK
-                    : "",
-                // Only include enabled MCP servers, strip the UI-only 'enabled' field
-                mcp_servers: (settings.llm.mcp_servers ?? [])
-                  .filter((s) => s.enabled)
-                  .map(({ enabled: _, ...rest }) => rest),
-                // Template variables: use joined user's name when available
-                template_variables: {
-                  username: usernameValue,
-                  ...(typeof settings.llm.template_variables === "object" &&
-                  settings.llm.template_variables != null
-                    ? settings.llm.template_variables
-                    : {}),
-                },
-              }
-            : {},
-          tts: settings.tts ?? {},
-          asr: settings.asr ?? undefined,
-        }),
-    turn_detection: settings.enable_turn_detection
-      ? (settings.turn_detection ?? undefined)
-      : undefined,
-    filler_words: settings.filler_words ?? undefined,
-    advanced_features: {
-      ...settings.advanced_features,
-      enable_mllm: useMllm,
+  const masked = buildMaskedJoinPreview({
+    settings,
+    runtime: {
+      channel: "<set by server>",
+      token: "<set by server>",
+      agentRtcUid: "0",
+      remoteRtcUids: ["<uid>"],
+      username: usernameValue,
     },
-    parameters: settings.parameters ?? undefined,
-    avatar: settings.avatar ?? undefined,
-  };
-  const masked = maskKeysInObject(props);
+  });
   return JSON.stringify(
-    { name: settings.name ?? "agent-1", properties: masked },
+    {
+      name: settings.name ?? "agent-1",
+      ...(settings.pipeline_id ? { pipeline_id: settings.pipeline_id } : {}),
+      properties: masked,
+    },
     null,
     2,
   );
@@ -1993,6 +1995,10 @@ const AgentSettingsSidebarContent: React.FC<{
   const setAgentSettings = useAppStore((state) => state.setAgentSettings);
   const agentId = useAppStore((state) => state.agentId);
   const agentSessionHistory = useAppStore((state) => state.agentSessionHistory);
+  const liveAgentMetrics = useAppStore((state) => state.liveAgentMetrics);
+  const liveAgentErrors = useAppStore((state) => state.liveAgentErrors);
+  const liveMessageErrors = useAppStore((state) => state.liveMessageErrors);
+  const manualTurnResults = useAppStore((state) => state.manualTurnResults);
   const removeAgentSessionFromHistory = useAppStore(
     (state) => state.removeAgentSessionFromHistory,
   );
@@ -2004,6 +2010,7 @@ const AgentSettingsSidebarContent: React.FC<{
     Record<SectionKey, boolean>
   >({
     llm: false,
+    mllm: false,
     tts: false,
     asr: false,
     avatar: false,
@@ -2019,6 +2026,7 @@ const AgentSettingsSidebarContent: React.FC<{
   // Advanced section sub-panels (Turn detection, Filler words, Features)
   const [advancedSubsections, setAdvancedSubsections] = React.useState({
     turnDetection: false,
+    interruption: false,
     fillerWords: false,
     features: false,
   });
@@ -2084,6 +2092,18 @@ const AgentSettingsSidebarContent: React.FC<{
   );
   const [selectedAvatarVendor, setSelectedAvatarVendor] =
     React.useState<AvatarVendor>("anam");
+  const llmByokDraft = React.useRef<{
+    config: LLMConfig;
+    selectedVendor: LLMVendor;
+  } | null>(null);
+  const ttsByokDraft = React.useRef<{
+    config: TTSConfig;
+    selectedVendor: TTSVendor;
+  } | null>(null);
+  const asrByokDraft = React.useRef<{
+    config: ASRConfig;
+    selectedVendor: ASRVendor;
+  } | null>(null);
 
   // Track whether form is initialized from store (to prevent infinite sync loop)
   const isFormInitialized = React.useRef(false);
@@ -2121,6 +2141,12 @@ const AgentSettingsSidebarContent: React.FC<{
       if (existingSettings.avatar?.vendor) {
         setSelectedAvatarVendor(existingSettings.avatar.vendor);
       }
+      if (existingSettings.tts?.vendor in TTS_PRESETS) {
+        setSelectedTTSVendor(existingSettings.tts.vendor as TTSVendor);
+      }
+      if (existingSettings.asr?.vendor && existingSettings.asr.vendor in ASR_PRESETS) {
+        setSelectedASRVendor(existingSettings.asr.vendor as ASRVendor);
+      }
       isFormInitialized.current = true;
     }
   }, [existingSettings]);
@@ -2141,6 +2167,19 @@ const AgentSettingsSidebarContent: React.FC<{
     setSettings((prev) => ({
       ...prev,
       llm: { ...prev.llm, ...updates },
+    }));
+  };
+
+  const updateMllm = (updates: Partial<MllmConfig>) => {
+    setSettings((prev) => ({
+      ...prev,
+      mllm: {
+        enable: false,
+        vendor: "openai",
+        params: { model: "gpt-realtime" },
+        ...prev.mllm,
+        ...updates,
+      },
     }));
   };
 
@@ -2176,10 +2215,106 @@ const AgentSettingsSidebarContent: React.FC<{
     updateAvatar({ vendor, params: getDefaultAvatarParams(vendor) });
   };
 
+  const handleLLMCredentialModeChange = (credentialMode: "managed" | "byok") => {
+    if (credentialMode === "managed") {
+      if (settings.llm.credential_mode !== "managed") {
+        llmByokDraft.current = {
+          config: cloneSettingsBlock(settings.llm),
+          selectedVendor: selectedLLMVendor,
+        };
+      }
+      setSelectedLLMVendor("openai");
+      setSettings((prev) => ({
+        ...prev,
+        llm: normalizeManagedLLM(
+          prev.llm,
+          MANAGED_LLM_PROVIDERS.openai.defaultModel,
+        ),
+      }));
+      return;
+    }
+
+    const draft = llmByokDraft.current;
+    const fallback = getDefaultSettings().llm;
+    setSelectedLLMVendor(draft?.selectedVendor ?? "openai");
+    setSettings((prev) => ({
+      ...prev,
+      llm: cloneSettingsBlock(draft?.config ?? fallback),
+    }));
+  };
+
+  const handleTTSCredentialModeChange = (credentialMode: "managed" | "byok") => {
+    if (credentialMode === "managed") {
+      if (settings.tts.credential_mode !== "managed") {
+        ttsByokDraft.current = {
+          config: cloneSettingsBlock(settings.tts),
+          selectedVendor: selectedTTSVendor,
+        };
+      }
+      setSelectedTTSVendor("minimax");
+      setSettings((prev) => ({
+        ...prev,
+        tts: normalizeManagedTTS(prev.tts, "minimax"),
+      }));
+      return;
+    }
+
+    const draft = ttsByokDraft.current;
+    const fallback = getDefaultSettings().tts;
+    setSelectedTTSVendor(draft?.selectedVendor ?? fallback.vendor);
+    setSettings((prev) => ({
+      ...prev,
+      tts: cloneSettingsBlock(draft?.config ?? fallback),
+    }));
+  };
+
+  const handleASRCredentialModeChange = (credentialMode: "managed" | "byok") => {
+    if (credentialMode === "managed") {
+      if (settings.asr?.credential_mode !== "managed") {
+        asrByokDraft.current = {
+          config: cloneSettingsBlock(settings.asr ?? {}),
+          selectedVendor: selectedASRVendor,
+        };
+      }
+      setSelectedASRVendor("deepgram");
+      setSettings((prev) => ({
+        ...prev,
+        asr: normalizeManagedASR(prev.asr),
+      }));
+      return;
+    }
+
+    const draft = asrByokDraft.current;
+    const fallback = getDefaultSettings().asr ?? {};
+    setSelectedASRVendor(
+      draft?.selectedVendor ?? (fallback.vendor as ASRVendor) ?? "ares",
+    );
+    setSettings((prev) => ({
+      ...prev,
+      asr: cloneSettingsBlock(draft?.config ?? fallback),
+    }));
+  };
+
   const handleLLMVendorChange = (vendor: LLMVendor) => {
+    if (settings.llm.credential_mode === "managed") {
+      setSelectedLLMVendor("openai");
+      setSettings((prev) => ({
+        ...prev,
+        llm: normalizeManagedLLM(prev.llm),
+      }));
+      return;
+    }
     setSelectedLLMVendor(vendor);
     const preset = LLM_PRESETS[vendor];
     updateLLM({
+      vendor:
+        vendor === "openai"
+          ? "openai"
+          : vendor === "azure_openai"
+            ? "azure"
+            : vendor === "xai"
+              ? "xai"
+              : "custom",
       url: preset.url || "",
       style: preset.style,
       headers: preset.headers,
@@ -2191,6 +2326,15 @@ const AgentSettingsSidebarContent: React.FC<{
   };
 
   const handleTTSVendorChange = (vendor: TTSVendor) => {
+    if (settings.tts.credential_mode === "managed") {
+      const managedVendor = vendor as ManagedTTSVendor;
+      setSelectedTTSVendor(managedVendor);
+      setSettings((prev) => ({
+        ...prev,
+        tts: normalizeManagedTTS(prev.tts, managedVendor),
+      }));
+      return;
+    }
     setSelectedTTSVendor(vendor);
     const defaultParams: Record<string, unknown> = { key: "" };
 
@@ -2213,12 +2357,30 @@ const AgentSettingsSidebarContent: React.FC<{
         voice: "alloy",
         speed: 1.0,
       });
+    } else if (vendor === "generic_http") {
+      updateTTS({
+        vendor,
+        credential_mode: "byok",
+        url: "",
+        headers: {},
+        skip_patterns: [],
+        params: {},
+      });
+      return;
     }
 
     updateTTS({ vendor, params: defaultParams });
   };
 
   const handleASRVendorChange = (vendor: ASRVendor) => {
+    if (settings.asr?.credential_mode === "managed") {
+      setSelectedASRVendor("deepgram");
+      setSettings((prev) => ({
+        ...prev,
+        asr: normalizeManagedASR(prev.asr),
+      }));
+      return;
+    }
     setSelectedASRVendor(vendor);
     const defaultParams: Record<string, unknown> = {};
 
@@ -2244,6 +2406,11 @@ const AgentSettingsSidebarContent: React.FC<{
 
   // Apply: persist current settings to IndexedDB (without closing)
   const handleApply = React.useCallback(async () => {
+    const validation = validateAgentSettings(settings);
+    if (!validation.valid) {
+      showToast(validation.errors[0]?.message ?? "Invalid agent settings", "error");
+      return;
+    }
     if (settings.avatar?.enable && settings.avatar.vendor === "lemonslice") {
       const params = settings.avatar.params as AvatarLemonSliceParams;
       if (!isHttpUrl(params.avatar_id)) {
@@ -2302,6 +2469,50 @@ const AgentSettingsSidebarContent: React.FC<{
     }));
   };
 
+  const getManagedMiniMaxVoiceId = (): string => {
+    const params = settings.tts.params as Record<string, unknown>;
+    const voiceSetting = params.voice_setting;
+    if (
+      voiceSetting &&
+      typeof voiceSetting === "object" &&
+      !Array.isArray(voiceSetting)
+    ) {
+      const voiceId = (voiceSetting as Record<string, unknown>).voice_id;
+      if (
+        typeof voiceId === "string" &&
+        MANAGED_MINIMAX_VOICES.some((voice) => voice.value === voiceId)
+      ) {
+        return voiceId;
+      }
+    }
+    return DEFAULT_MANAGED_MINIMAX_VOICE_ID;
+  };
+
+  const setManagedMiniMaxVoiceId = (voiceId: string) => {
+    setSettings((prev) => {
+      const params = prev.tts.params as Record<string, unknown>;
+      const currentVoiceSetting =
+        params.voice_setting &&
+        typeof params.voice_setting === "object" &&
+        !Array.isArray(params.voice_setting)
+          ? (params.voice_setting as Record<string, unknown>)
+          : {};
+      return {
+        ...prev,
+        tts: {
+          ...prev.tts,
+          params: {
+            ...params,
+            voice_setting: {
+              ...currentVoiceSetting,
+              voice_id: voiceId,
+            },
+          },
+        },
+      };
+    });
+  };
+
   const getASRParam = (key: string): string => {
     const params = (settings.asr?.params || {}) as Record<string, unknown>;
     return (params[key] as string) || "";
@@ -2348,6 +2559,44 @@ const AgentSettingsSidebarContent: React.FC<{
     });
   };
 
+  const llmManaged = settings.llm.credential_mode === "managed";
+  const ttsManaged = settings.tts.credential_mode === "managed";
+  const asrManaged = settings.asr?.credential_mode === "managed";
+  const llmProviderOptions = llmManaged
+    ? Object.entries(MANAGED_LLM_PROVIDERS).map(([value, provider]) => ({
+        value,
+        label: provider.label,
+      }))
+    : Object.entries(LLM_PRESETS).map(([value, provider]) => ({
+        value,
+        label: provider.label,
+      }));
+  const llmModels = llmManaged
+    ? MANAGED_LLM_PROVIDERS.openai.models
+    : LLM_PRESETS[selectedLLMVendor].models;
+  const managedTTSDefinition =
+    MANAGED_TTS_PROVIDERS[selectedTTSVendor as ManagedTTSVendor] ??
+    MANAGED_TTS_PROVIDERS.minimax;
+  const ttsProviderOptions = ttsManaged
+    ? Object.entries(MANAGED_TTS_PROVIDERS).map(([value, provider]) => ({
+        value,
+        label: provider.label,
+      }))
+    : Object.entries(TTS_PRESETS)
+        .filter(([key]) => key !== "fish_audio" && key !== "polly")
+        .map(([value, provider]) => ({ value, label: provider.label }));
+  const asrProviderOptions = asrManaged
+    ? Object.entries(MANAGED_ASR_PROVIDERS).map(([value, provider]) => ({
+        value,
+        label: provider.label,
+      }))
+    : Object.entries(ASR_PRESETS)
+        .filter(([key]) => key !== "transcribe")
+        .map(([value, provider]) => ({ value, label: provider.label }));
+  const asrModels = asrManaged
+    ? MANAGED_ASR_PROVIDERS.deepgram.models
+    : ASR_PRESETS.deepgram.models ?? [];
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto px-6 py-4 bg-gray-50 dark:bg-gray-900/50">
@@ -2384,6 +2633,19 @@ const AgentSettingsSidebarContent: React.FC<{
           />
         </FormField>
 
+        <FormField
+          label="Studio pipeline ID"
+          hint="Optional published Conversational AI Studio pipeline used as the base configuration."
+        >
+          <Input
+            value={settings.pipeline_id ?? ""}
+            onChange={(event) =>
+              setSettings({ ...settings, pipeline_id: event.target.value })
+            }
+            placeholder="Published pipeline ID"
+          />
+        </FormField>
+
         {/* LLM Section */}
         <Section
           title="LLM Configuration"
@@ -2400,41 +2662,60 @@ const AgentSettingsSidebarContent: React.FC<{
             <CustomSelect
               value={selectedLLMVendor}
               onChange={(v) => handleLLMVendorChange(v as LLMVendor)}
-              options={Object.entries(LLM_PRESETS).map(([key, preset]) => ({
-                value: key,
-                label: preset.label,
-              }))}
-            />
-          </FormField>
-
-          <FormField label="API URL" required tooltip="LLM callback endpoint.">
-            <Input
-              value={settings.llm.url}
-              onChange={(e) => updateLLM({ url: e.target.value })}
-              placeholder="https://api.openai.com/v1/chat/completions"
+              options={llmProviderOptions}
             />
           </FormField>
 
           <FormField
-            label="API Key"
-            required
-            tooltip="Verification key for the LLM."
-            hint="Leave empty to use server-configured key (LLM_API_KEY in .env)"
+            label="Credential mode"
+            hint="Managed uses credentials configured in Agora; BYOK uses the key below or the server environment."
           >
-            <Input
-              type="password"
-              value={settings.llm.api_key}
-              onChange={(e) => updateLLM({ api_key: e.target.value })}
-              placeholder="Leave empty for server key, or enter your LLM API key"
+            <CustomSelect
+              value={settings.llm.credential_mode ?? "byok"}
+              onChange={(credentialMode) =>
+                handleLLMCredentialModeChange(
+                  credentialMode as "managed" | "byok",
+                )
+              }
+              options={[
+                { value: "byok", label: "Bring your own key (BYOK)" },
+                { value: "managed", label: "Agora managed" },
+              ]}
             />
           </FormField>
+
+          {!llmManaged && (
+            <>
+              <FormField label="API URL" required tooltip="LLM callback endpoint.">
+                <Input
+                  value={settings.llm.url}
+                  onChange={(e) => updateLLM({ url: e.target.value })}
+                  placeholder="https://api.openai.com/v1/chat/completions"
+                />
+              </FormField>
+
+              <FormField
+                label="API Key"
+                required
+                tooltip="Verification key for the LLM."
+                hint="Leave empty to use server-configured key (LLM_API_KEY in .env)"
+              >
+                <Input
+                  type="password"
+                  value={settings.llm.api_key}
+                  onChange={(e) => updateLLM({ api_key: e.target.value })}
+                  placeholder="Leave empty for server key, or enter your LLM API key"
+                />
+              </FormField>
+            </>
+          )}
 
           <FormField
             label="Model"
             required
             tooltip="Model name for the selected LLM vendor."
           >
-            {LLM_PRESETS[selectedLLMVendor].models ? (
+            {llmModels ? (
               <CustomSelect
                 value={settings.llm.params?.model || ""}
                 onChange={(v) =>
@@ -2442,12 +2723,10 @@ const AgentSettingsSidebarContent: React.FC<{
                     params: { ...settings.llm.params, model: v },
                   })
                 }
-                options={LLM_PRESETS[selectedLLMVendor].models!.map(
-                  (model) => ({
-                    value: model,
-                    label: model,
-                  }),
-                )}
+                options={llmModels.map((model) => ({
+                  value: model,
+                  label: model,
+                }))}
               />
             ) : (
               <Input
@@ -2481,6 +2760,41 @@ const AgentSettingsSidebarContent: React.FC<{
             />
           </FormField>
 
+          {!llmManaged && (
+            <FormField
+              label="Request headers (JSON)"
+              hint="Optional provider headers. Stored as JSON and passed to the engine."
+            >
+              <Textarea
+                key={`llm-headers-${selectedLLMVendor}`}
+                rows={3}
+                defaultValue={
+                  typeof settings.llm.headers === "string"
+                    ? settings.llm.headers
+                    : JSON.stringify(settings.llm.headers ?? {}, null, 2)
+                }
+                onBlur={(event) => {
+                  try {
+                    const headers = JSON.parse(event.target.value) as unknown;
+                    if (
+                      typeof headers !== "object" ||
+                      headers == null ||
+                      Array.isArray(headers)
+                    ) {
+                      throw new Error("not-object");
+                    }
+                    updateLLM({
+                      headers: headers as Record<string, string>,
+                    });
+                  } catch {
+                    showToast("LLM headers must be a valid JSON object.", "error");
+                  }
+                }}
+                placeholder={'{"X-Custom-Header":"value"}'}
+              />
+            </FormField>
+          )}
+
           <FormField
             label="Greeting Message"
             hint="What the agent says when joining"
@@ -2492,6 +2806,105 @@ const AgentSettingsSidebarContent: React.FC<{
               placeholder="Hello! How can I help you?"
             />
           </FormField>
+
+          <FormField
+            label="Greeting audio URL"
+            hint="Optional public PCM audio URL used instead of synthesizing the greeting."
+          >
+            <Input
+              type="url"
+              value={settings.llm.greeting_audio_url ?? ""}
+              onChange={(event) =>
+                updateLLM({ greeting_audio_url: event.target.value })
+              }
+              placeholder="https://cdn.example.com/greeting.pcm"
+            />
+          </FormField>
+
+          <FormField label="Greeting mode">
+            <CustomSelect
+              value={settings.llm.greeting_configs?.mode ?? "single_every"}
+              onChange={(mode) =>
+                updateLLM({
+                  greeting_configs: {
+                    ...settings.llm.greeting_configs,
+                    mode: mode as "single_every" | "single_first",
+                  },
+                })
+              }
+              options={[
+                { value: "single_every", label: "Every session" },
+                { value: "single_first", label: "First session only" },
+              ]}
+            />
+          </FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Greeting delay (ms)">
+              <Input
+                type="number"
+                min={0}
+                value={settings.llm.greeting_configs?.delay_ms ?? 0}
+                onChange={(event) =>
+                  updateLLM({
+                    greeting_configs: {
+                      ...settings.llm.greeting_configs,
+                      delay_ms: Number(event.target.value),
+                    },
+                  })
+                }
+              />
+            </FormField>
+            <FormField label="Greeting PCM sample rate">
+              <CustomSelect
+                value={String(
+                  settings.llm.greeting_configs?.audio_pcm_sample_rate ?? 16000,
+                )}
+                onChange={(sampleRate) =>
+                  updateLLM({
+                    greeting_configs: {
+                      ...settings.llm.greeting_configs,
+                      audio_pcm_sample_rate: Number(sampleRate) as 16000 | 24000,
+                    },
+                  })
+                }
+                options={[
+                  { value: "16000", label: "16 kHz" },
+                  { value: "24000", label: "24 kHz" },
+                ]}
+              />
+            </FormField>
+          </div>
+          <FormField label="Greeting audio download timeout (ms)">
+            <Input
+              type="number"
+              min={200}
+              max={10000}
+              value={
+                settings.llm.greeting_configs?.audio_download_timeout_ms ??
+                1000
+              }
+              onChange={(event) =>
+                updateLLM({
+                  greeting_configs: {
+                    ...settings.llm.greeting_configs,
+                    audio_download_timeout_ms: Number(event.target.value),
+                  },
+                })
+              }
+            />
+          </FormField>
+          <Toggle
+            label="Greeting interruptible"
+            checked={settings.llm.greeting_configs?.interruptable ?? true}
+            onChange={(interruptable) =>
+              updateLLM({
+                greeting_configs: {
+                  ...settings.llm.greeting_configs,
+                  interruptable,
+                },
+              })
+            }
+          />
 
           <FormField
             label="Failure Message"
@@ -2540,6 +2953,256 @@ const AgentSettingsSidebarContent: React.FC<{
               />
             </FormField>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Input modalities">
+              <CustomSelect
+                value={
+                  settings.llm.input_modalities?.includes("image")
+                    ? "text_image"
+                    : "text"
+                }
+                onChange={(value) =>
+                  updateLLM({
+                    input_modalities:
+                      value === "text_image" ? ["text", "image"] : ["text"],
+                  })
+                }
+                options={[
+                  { value: "text", label: "Text" },
+                  { value: "text_image", label: "Text + image" },
+                ]}
+              />
+            </FormField>
+            <FormField label="Output modalities">
+              <CustomSelect
+                value={(settings.llm.output_modalities ?? ["text"]).join("_")}
+                onChange={(value) =>
+                  updateLLM({
+                    output_modalities: value.split("_") as (
+                      | "text"
+                      | "audio"
+                    )[],
+                  })
+                }
+                options={[
+                  { value: "text", label: "Text (use TTS)" },
+                  { value: "audio", label: "Audio" },
+                  { value: "text_audio", label: "Text + audio" },
+                ]}
+              />
+            </FormField>
+          </div>
+        </Section>
+
+        <Section
+          title="MLLM (Realtime voice)"
+          icon={<MdGraphicEq size={20} />}
+          isOpen={expandedSections.mllm}
+          onToggle={() => toggleSection("mllm")}
+          badge="v2.11"
+        >
+          <Toggle
+            label="Enable MLLM pipeline"
+            checked={settings.mllm?.enable ?? false}
+            onChange={(enable) => updateMllm({ enable })}
+            hint="Uses the realtime multimodal pipeline instead of LLM + ASR + TTS. Restart the agent after changing this."
+          />
+          {(settings.mllm?.enable ?? false) && (
+            <>
+              <FormField label="Vendor" required>
+                <CustomSelect
+                  value={settings.mllm?.vendor ?? "openai"}
+                  onChange={(vendor) =>
+                    updateMllm({
+                      vendor: vendor as NonNullable<MllmConfig["vendor"]>,
+                    })
+                  }
+                  options={[
+                    { value: "openai", label: "OpenAI Realtime" },
+                    { value: "azure", label: "Azure OpenAI Realtime" },
+                    { value: "gemini", label: "Gemini Live" },
+                    { value: "vertexai", label: "Vertex AI Live" },
+                    { value: "xai", label: "xAI Realtime" },
+                  ]}
+                />
+              </FormField>
+              <FormField label="Realtime endpoint URL">
+                <Input
+                  value={settings.mllm?.url ?? ""}
+                  onChange={(event) => updateMllm({ url: event.target.value })}
+                  placeholder="wss://provider.example/realtime"
+                />
+              </FormField>
+              <FormField label="API key" hint="Leave empty to use the server-configured credential.">
+                <Input
+                  type="password"
+                  value={maskKeyForDisplay(settings.mllm?.api_key)}
+                  onChange={(event) =>
+                    keyChange(event.target.value, settings.mllm?.api_key, (api_key) =>
+                      updateMllm({ api_key }),
+                    )
+                  }
+                />
+              </FormField>
+              <FormField label="Model">
+                <Input
+                  value={String(settings.mllm?.params?.model ?? "")}
+                  onChange={(event) =>
+                    updateMllm({
+                      params: {
+                        ...settings.mllm?.params,
+                        model: event.target.value,
+                      },
+                    })
+                  }
+                  placeholder="gpt-realtime"
+                />
+              </FormField>
+              <FormField label="Voice">
+                <Input
+                  value={String(settings.mllm?.params?.voice ?? "")}
+                  onChange={(event) =>
+                    updateMllm({
+                      params: {
+                        ...settings.mllm?.params,
+                        voice: event.target.value,
+                      },
+                    })
+                  }
+                  placeholder="alloy"
+                />
+              </FormField>
+              <FormField label="Greeting message">
+                <Input
+                  value={settings.mllm?.greeting_message ?? ""}
+                  onChange={(event) =>
+                    updateMllm({ greeting_message: event.target.value })
+                  }
+                />
+              </FormField>
+              <FormField
+                label="Short-term memory messages (JSON)"
+                hint="OpenAI Realtime conversation item objects passed as mllm.messages."
+              >
+                <Textarea
+                  key={`mllm-messages-${settings.mllm?.vendor ?? "openai"}`}
+                  rows={5}
+                  defaultValue={JSON.stringify(settings.mllm?.messages ?? [], null, 2)}
+                  onBlur={(event) => {
+                    try {
+                      const messages = JSON.parse(event.target.value) as unknown;
+                      if (!Array.isArray(messages)) throw new Error("not-array");
+                      updateMllm({
+                        messages: messages as Record<string, unknown>[],
+                      });
+                    } catch {
+                      showToast("MLLM messages must be a valid JSON array.", "error");
+                    }
+                  }}
+                />
+              </FormField>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Input modalities">
+                  <CustomSelect
+                    value={(settings.mllm?.input_modalities ?? ["audio"]).join("_")}
+                    onChange={(value) =>
+                      updateMllm({
+                        input_modalities: value.split("_") as (
+                          | "text"
+                          | "audio"
+                        )[],
+                      })
+                    }
+                    options={[
+                      { value: "audio", label: "Audio" },
+                      { value: "audio_text", label: "Audio + text" },
+                    ]}
+                  />
+                </FormField>
+                <FormField label="Output modalities">
+                  <Input value="Text + audio" disabled />
+                </FormField>
+              </div>
+              <FormField
+                label="Provider parameters (JSON)"
+                hint="All current provider-specific v2.11 fields are passed through."
+              >
+                <Textarea
+                  key={`mllm-params-${settings.mllm?.vendor ?? "openai"}`}
+                  rows={5}
+                  defaultValue={JSON.stringify(settings.mllm?.params ?? {}, null, 2)}
+                  onBlur={(event) => {
+                    try {
+                      updateMllm({
+                        params: JSON.parse(event.target.value) as Record<
+                          string,
+                          unknown
+                        >,
+                      });
+                    } catch {
+                      showToast("MLLM provider parameters must be valid JSON.", "error");
+                    }
+                  }}
+                />
+              </FormField>
+              <FormField label="Turn detection mode">
+                <CustomSelect
+                  value={settings.mllm?.turn_detection?.mode ?? "server_vad"}
+                  onChange={(mode) =>
+                    updateMllm({
+                      turn_detection: {
+                        mode: mode as NonNullable<
+                          MllmConfig["turn_detection"]
+                        >["mode"],
+                      },
+                    })
+                  }
+                  options={[
+                    { value: "agora_vad", label: "Agora VAD" },
+                    { value: "server_vad", label: "Provider server VAD" },
+                    { value: "semantic_vad", label: "Provider semantic VAD" },
+                  ]}
+                />
+              </FormField>
+              <FormField
+                label="Turn detection config (JSON)"
+                hint="Applied to the selected *_config field when the JSON is valid."
+              >
+                <Textarea
+                  rows={4}
+                  defaultValue={JSON.stringify(
+                    settings.mllm?.turn_detection?.[
+                      `${settings.mllm?.turn_detection?.mode ?? "server_vad"}_config` as
+                        | "agora_vad_config"
+                        | "server_vad_config"
+                        | "semantic_vad_config"
+                    ] ?? {},
+                    null,
+                    2,
+                  )}
+                  onBlur={(event) => {
+                    try {
+                      const parsed = JSON.parse(event.target.value) as Record<
+                        string,
+                        unknown
+                      >;
+                      const mode =
+                        settings.mllm?.turn_detection?.mode ?? "server_vad";
+                      updateMllm({
+                        turn_detection: {
+                          ...settings.mllm?.turn_detection,
+                          mode,
+                          [`${mode}_config`]: parsed,
+                        },
+                      });
+                    } catch {
+                      showToast("MLLM turn detection config must be valid JSON.", "error");
+                    }
+                  }}
+                />
+              </FormField>
+            </>
+          )}
         </Section>
 
         {/* TTS Section */}
@@ -2554,32 +3217,86 @@ const AgentSettingsSidebarContent: React.FC<{
             <CustomSelect
               value={selectedTTSVendor}
               onChange={(v) => handleTTSVendorChange(v as TTSVendor)}
-              options={Object.entries(TTS_PRESETS).map(([key, preset]) => ({
-                value: key,
-                label: preset.label,
-              }))}
+              options={ttsProviderOptions}
             />
           </FormField>
 
-          <FormField
-            label="API Key"
-            required
-            hint="Leave empty to use server-configured key (ELEVENLABS_API_KEY / MICROSOFT_TTS_KEY / OPENAI_TTS_KEY in .env)"
-          >
-            <Input
-              type="password"
-              value={maskKeyForDisplay(getTTSParam("key"))}
-              onChange={(e) =>
-                keyChange(e.target.value, getTTSParam("key"), (k) =>
-                  setTTSParam("key", k),
+          <FormField label="Credential mode">
+            <CustomSelect
+              value={settings.tts.credential_mode ?? "byok"}
+              onChange={(credentialMode) =>
+                handleTTSCredentialModeChange(
+                  credentialMode as "managed" | "byok",
                 )
               }
-              placeholder="Leave empty for server key, or enter your TTS API key"
+              options={[
+                { value: "byok", label: "Bring your own key (BYOK)" },
+                { value: "managed", label: "Agora managed" },
+              ]}
             />
           </FormField>
 
+          {!ttsManaged && (
+            <FormField
+              label="API Key"
+              required
+              hint="Leave empty to use server-configured key (ELEVENLABS_API_KEY / MICROSOFT_TTS_KEY / OPENAI_TTS_KEY in .env)"
+            >
+              <Input
+                type="password"
+                value={maskKeyForDisplay(getTTSParam("key"))}
+                onChange={(e) =>
+                  keyChange(e.target.value, getTTSParam("key"), (k) =>
+                    setTTSParam("key", k),
+                  )
+                }
+                placeholder="Leave empty for server key, or enter your TTS API key"
+              />
+            </FormField>
+          )}
+
+          {ttsManaged && (
+            <FormField label="Model" required>
+              <CustomSelect
+                value={getTTSParam("model") || managedTTSDefinition.defaultModel}
+                onChange={(model) => setTTSParam("model", model)}
+                options={managedTTSDefinition.models.map((model) => ({
+                  value: model,
+                  label: model,
+                }))}
+              />
+            </FormField>
+          )}
+
+          {ttsManaged && selectedTTSVendor === "minimax" && (
+            <>
+              <FormField label="Voice" required>
+                <CustomSelect
+                  value={getManagedMiniMaxVoiceId()}
+                  onChange={setManagedMiniMaxVoiceId}
+                  options={MANAGED_MINIMAX_VOICES.map((voice) => ({
+                    value: voice.value,
+                    label: `${voice.label} — ${voice.language}`,
+                  }))}
+                />
+              </FormField>
+              <p className="-mt-3 mb-4 text-xs text-gray-500 dark:text-gray-500">
+                Six supported system voices are shown.{" "}
+                <a
+                  href="https://platform.minimax.io/docs/faq/system-voice-id"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-agora-accent-blue hover:underline"
+                >
+                  View the complete MiniMax catalog
+                </a>
+                .
+              </p>
+            </>
+          )}
+
           {/* Microsoft TTS specific fields */}
-          {selectedTTSVendor === "microsoft" && (
+          {!ttsManaged && selectedTTSVendor === "microsoft" && (
             <>
               <FormField label="Region" required hint="e.g., eastus, westus2">
                 <Input
@@ -2638,7 +3355,7 @@ const AgentSettingsSidebarContent: React.FC<{
           )}
 
           {/* ElevenLabs specific fields */}
-          {selectedTTSVendor === "elevenlabs" && (
+          {!ttsManaged && selectedTTSVendor === "elevenlabs" && (
             <>
               <FormField label="Model" required>
                 <CustomSelect
@@ -2693,16 +3410,18 @@ const AgentSettingsSidebarContent: React.FC<{
           {/* OpenAI TTS specific fields */}
           {selectedTTSVendor === "openai" && (
             <>
-              <FormField label="Model" required>
-                <CustomSelect
-                  value={getTTSParam("model")}
-                  onChange={(v) => setTTSParam("model", v)}
-                  options={(TTS_PRESETS.openai.models ?? []).map((model) => ({
-                    value: model,
-                    label: model,
-                  }))}
-                />
-              </FormField>
+              {!ttsManaged && (
+                <FormField label="Model" required>
+                  <CustomSelect
+                    value={getTTSParam("model")}
+                    onChange={(v) => setTTSParam("model", v)}
+                    options={(TTS_PRESETS.openai.models ?? []).map((model) => ({
+                      value: model,
+                      label: model,
+                    }))}
+                  />
+                </FormField>
+              )}
               <FormField label="Voice" required>
                 <CustomSelect
                   value={getTTSParam("voice")}
@@ -2715,6 +3434,84 @@ const AgentSettingsSidebarContent: React.FC<{
               </FormField>
             </>
           )}
+          {!ttsManaged && selectedTTSVendor === "generic_http" && (
+            <>
+              <FormField
+                label="Generic TTS URL"
+                required
+                hint="HTTP endpoint implementing Agora's generic TTS request contract."
+              >
+                <Input
+                  type="url"
+                  value={settings.tts.url ?? ""}
+                  onChange={(event) => updateTTS({ url: event.target.value })}
+                  placeholder="https://tts.example.com/v1/audio/speech"
+                />
+              </FormField>
+              <FormField
+                label="Headers (JSON)"
+                hint="Saved only when the JSON is valid."
+              >
+                <Textarea
+                  rows={3}
+                  defaultValue={JSON.stringify(settings.tts.headers ?? {}, null, 2)}
+                  onBlur={(event) => {
+                    try {
+                      updateTTS({
+                        headers: JSON.parse(event.target.value) as Record<
+                          string,
+                          string
+                        >,
+                      });
+                    } catch {
+                      showToast("Generic TTS headers must be valid JSON.", "error");
+                    }
+                  }}
+                />
+              </FormField>
+            </>
+          )}
+          {!ttsManaged && (
+            <FormField
+              label="Provider parameters (JSON)"
+              hint="Vendor-specific v2.11 parameters. Dedicated fields above update this same object."
+            >
+              <Textarea
+                key={`tts-params-${selectedTTSVendor}`}
+                rows={5}
+                defaultValue={JSON.stringify(settings.tts.params ?? {}, null, 2)}
+                onBlur={(event) => {
+                  try {
+                    updateTTS({
+                      params: JSON.parse(event.target.value) as Record<
+                        string,
+                        unknown
+                      >,
+                    });
+                  } catch {
+                    showToast("TTS provider parameters must be valid JSON.", "error");
+                  }
+                }}
+              />
+            </FormField>
+          )}
+          <FormField
+            label="Skip patterns"
+            hint="Comma-separated numeric pattern IDs omitted from synthesized speech."
+          >
+            <Input
+              value={(settings.tts.skip_patterns ?? []).join(", ")}
+              onChange={(event) =>
+                updateTTS({
+                  skip_patterns: event.target.value
+                    .split(",")
+                    .map((value) => Number(value.trim()))
+                    .filter(Number.isFinite),
+                })
+              }
+              placeholder="1, 2"
+            />
+          </FormField>
         </Section>
 
         {/* ASR Section */}
@@ -2731,10 +3528,22 @@ const AgentSettingsSidebarContent: React.FC<{
             <CustomSelect
               value={selectedASRVendor}
               onChange={(v) => handleASRVendorChange(v as ASRVendor)}
-              options={Object.entries(ASR_PRESETS).map(([key, preset]) => ({
-                value: key,
-                label: preset.label,
-              }))}
+              options={asrProviderOptions}
+            />
+          </FormField>
+
+          <FormField label="Credential mode">
+            <CustomSelect
+              value={settings.asr?.credential_mode ?? "byok"}
+              onChange={(credentialMode) =>
+                handleASRCredentialModeChange(
+                  credentialMode as "managed" | "byok",
+                )
+              }
+              options={[
+                { value: "byok", label: "Bring your own key (BYOK)" },
+                { value: "managed", label: "Agora managed" },
+              ]}
             />
           </FormField>
 
@@ -2749,8 +3558,29 @@ const AgentSettingsSidebarContent: React.FC<{
             />
           </FormField>
 
+          {selectedASRVendor === "ares" && (
+            <FormField
+              label="ARES keywords"
+              hint="One keyword per line; current engine limit is 128."
+            >
+              <Textarea
+                rows={4}
+                value={(settings.asr?.keywords ?? []).join("\n")}
+                onChange={(event) =>
+                  updateASR({
+                    keywords: event.target.value
+                      .split("\n")
+                      .map((keyword) => keyword.trim())
+                      .filter(Boolean)
+                      .slice(0, 128),
+                  })
+                }
+              />
+            </FormField>
+          )}
+
           {/* Vendor-specific ASR fields */}
-          {selectedASRVendor === "microsoft" && (
+          {!asrManaged && selectedASRVendor === "microsoft" && (
             <>
               <FormField label="API Key" required>
                 <Input
@@ -2772,25 +3602,51 @@ const AgentSettingsSidebarContent: React.FC<{
 
           {selectedASRVendor === "deepgram" && (
             <>
-              <FormField label="API Key" required>
-                <Input
-                  type="password"
-                  value={getASRParam("key")}
-                  onChange={(e) => setASRParam("key", e.target.value)}
-                  placeholder="Deepgram API key"
-                />
-              </FormField>
+              {!asrManaged && (
+                <FormField label="API Key" required>
+                  <Input
+                    type="password"
+                    value={getASRParam("key")}
+                    onChange={(e) => setASRParam("key", e.target.value)}
+                    placeholder="Deepgram API key"
+                  />
+                </FormField>
+              )}
               <FormField label="Model">
                 <CustomSelect
                   value={getASRParam("model") || "nova-3"}
                   onChange={(v) => setASRParam("model", v)}
-                  options={(ASR_PRESETS.deepgram.models ?? []).map((model) => ({
+                  options={asrModels.map((model) => ({
                     value: model,
                     label: model,
                   }))}
                 />
               </FormField>
             </>
+          )}
+          {!asrManaged && (
+            <FormField
+              label="Provider parameters (JSON)"
+              hint="Vendor-specific v2.11 parameters for the selected recognizer."
+            >
+              <Textarea
+                key={`asr-params-${selectedASRVendor}`}
+                rows={5}
+                defaultValue={JSON.stringify(settings.asr?.params ?? {}, null, 2)}
+                onBlur={(event) => {
+                  try {
+                    updateASR({
+                      params: JSON.parse(event.target.value) as Record<
+                        string,
+                        unknown
+                      >,
+                    });
+                  } catch {
+                    showToast("ASR provider parameters must be valid JSON.", "error");
+                  }
+                }}
+              />
+            </FormField>
           )}
         </Section>
 
@@ -3141,6 +3997,34 @@ const AgentSettingsSidebarContent: React.FC<{
           onToggle={() => toggleSection("debug")}
           badge="Debug"
         >
+          <div className="mb-4 grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-800/50">
+              <div className="text-gray-500 dark:text-gray-400">Live metrics</div>
+              <div className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+                {liveAgentMetrics.length}
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-800/50">
+              <div className="text-gray-500 dark:text-gray-400">Runtime errors</div>
+              <div className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+                {liveAgentErrors.length + liveMessageErrors.length}
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-800/50">
+              <div className="text-gray-500 dark:text-gray-400">Manual turn results</div>
+              <div className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+                {manualTurnResults.length}
+              </div>
+            </div>
+          </div>
+          {(liveAgentErrors.at(-1) || liveMessageErrors.at(-1)) && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+              Latest runtime error: {String(
+                (liveMessageErrors.at(-1) ?? liveAgentErrors.at(-1))?.error
+                  .message ?? "Unknown error",
+              )}
+            </div>
+          )}
           <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
             <p className="text-sm text-amber-800 dark:text-amber-200">
               Per-turn metrics are available{" "}
@@ -3289,7 +4173,7 @@ const AgentSettingsSidebarContent: React.FC<{
             <Input
               type="number"
               min={0}
-              max={300}
+              max={259200}
               value={settings.idle_timeout ?? 30}
               onChange={(e) =>
                 setSettings({
@@ -3299,6 +4183,64 @@ const AgentSettingsSidebarContent: React.FC<{
               }
             />
           </FormField>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Geofence area">
+              <CustomSelect
+                value={settings.geofence?.area ?? "GLOBAL"}
+                onChange={(area) =>
+                  setSettings({
+                    ...settings,
+                    geofence: {
+                      area: area as NonNullable<AgentSettingsType["geofence"]>["area"],
+                      ...(area === "GLOBAL" && settings.geofence?.exclude_area
+                        ? { exclude_area: settings.geofence.exclude_area }
+                        : {}),
+                    },
+                  })
+                }
+                options={[
+                  { value: "GLOBAL", label: "Global" },
+                  { value: "NORTH_AMERICA", label: "North America" },
+                  { value: "EUROPE", label: "Europe" },
+                  { value: "ASIA", label: "Asia" },
+                  { value: "INDIA", label: "India" },
+                  { value: "JAPAN", label: "Japan" },
+                ]}
+              />
+            </FormField>
+            {settings.geofence?.area === "GLOBAL" && (
+              <FormField label="Exclude area">
+                <CustomSelect
+                  value={settings.geofence.exclude_area ?? ""}
+                  onChange={(exclude_area) =>
+                    setSettings({
+                      ...settings,
+                      geofence: {
+                        area: "GLOBAL",
+                        ...(exclude_area
+                          ? {
+                              exclude_area:
+                                exclude_area as NonNullable<
+                                  AgentSettingsType["geofence"]
+                                >["exclude_area"],
+                            }
+                          : {}),
+                      },
+                    })
+                  }
+                  options={[
+                    { value: "", label: "None" },
+                    { value: "NORTH_AMERICA", label: "North America" },
+                    { value: "EUROPE", label: "Europe" },
+                    { value: "ASIA", label: "Asia" },
+                    { value: "INDIA", label: "India" },
+                    { value: "JAPAN", label: "Japan" },
+                  ]}
+                />
+              </FormField>
+            )}
+          </div>
 
           {/* Turn detection (Agora v2: mode + config) */}
           <CollapsibleSubSection
@@ -3363,7 +4305,7 @@ const AgentSettingsSidebarContent: React.FC<{
             >
               <FormField
                 label="Mode"
-                hint="VAD = by audio level; Keywords = trigger phrase; Disabled = do not auto-detect."
+                hint="VAD detects speech automatically. Manual waits for manual SOS/EOS controls and requires RTM."
                 tooltip="Start-of-speech detection mode."
               >
                 <CustomSelect
@@ -3372,11 +4314,23 @@ const AgentSettingsSidebarContent: React.FC<{
                     "vad"
                   }
                   onChange={(v) => {
-                    const mode = v as "vad" | "keywords" | "disabled";
+                    const mode = v as "vad" | "manual";
                     const defaults =
                       getDefaultSettings().turn_detection!.config!;
                     setSettings({
                       ...settings,
+                      ...(mode === "manual"
+                        ? {
+                            advanced_features: {
+                              ...settings.advanced_features,
+                              enable_rtm: true,
+                            },
+                            parameters: {
+                              ...settings.parameters,
+                              data_channel: "rtm" as const,
+                            },
+                          }
+                        : {}),
                       turn_detection: {
                         ...settings.turn_detection,
                         mode: "default",
@@ -3393,20 +4347,6 @@ const AgentSettingsSidebarContent: React.FC<{
                                   prefix_padding_ms: 800,
                                 },
                             }),
-                            ...(mode === "keywords" && {
-                              keywords_config: settings.turn_detection?.config
-                                ?.start_of_speech?.keywords_config ?? {
-                                interrupt_duration_ms: 160,
-                                prefix_padding_ms: 800,
-                                triggered_keywords: [],
-                              },
-                            }),
-                            ...(mode === "disabled" && {
-                              disabled_config: settings.turn_detection?.config
-                                ?.start_of_speech?.disabled_config ?? {
-                                strategy: "append",
-                              },
-                            }),
                           },
                           end_of_speech:
                             settings.turn_detection?.config?.end_of_speech ??
@@ -3417,8 +4357,7 @@ const AgentSettingsSidebarContent: React.FC<{
                   }}
                   options={[
                     { value: "vad", label: "VAD" },
-                    { value: "keywords", label: "Keywords" },
-                    { value: "disabled", label: "Disabled" },
+                    { value: "manual", label: "Manual SOS / EOS (RTM)" },
                   ]}
                 />
               </FormField>
@@ -3565,105 +4504,6 @@ const AgentSettingsSidebarContent: React.FC<{
                 </div>
               )}
 
-              {/* Keywords mode config */}
-              {(settings.turn_detection?.config?.start_of_speech?.mode ??
-                "vad") === "keywords" && (
-                <div className="mt-3 pl-3 border-l-2 border-agora-accent-blue/30">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">
-                    keywords_config
-                  </p>
-                  <FormField
-                    label="Triggered keywords"
-                    hint="Phrases that start a turn when detected. Comma-separated."
-                  >
-                    <Input
-                      value={(
-                        settings.turn_detection?.config?.start_of_speech
-                          ?.keywords_config?.triggered_keywords ?? []
-                      ).join(", ")}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          turn_detection: {
-                            ...settings.turn_detection,
-                            mode: "default",
-                            config: {
-                              ...settings.turn_detection?.config,
-                              start_of_speech: {
-                                ...settings.turn_detection?.config
-                                  ?.start_of_speech,
-                                mode: "keywords",
-                                keywords_config: {
-                                  ...settings.turn_detection?.config
-                                    ?.start_of_speech?.keywords_config,
-                                  triggered_keywords: e.target.value
-                                    .split(",")
-                                    .map((s) => s.trim())
-                                    .filter(Boolean),
-                                  interrupt_duration_ms:
-                                    settings.turn_detection?.config
-                                      ?.start_of_speech?.keywords_config
-                                      ?.interrupt_duration_ms ?? 160,
-                                  prefix_padding_ms:
-                                    settings.turn_detection?.config
-                                      ?.start_of_speech?.keywords_config
-                                      ?.prefix_padding_ms ?? 800,
-                                },
-                              },
-                            },
-                          },
-                        })
-                      }
-                      placeholder="e.g. hello, are you there"
-                    />
-                  </FormField>
-                </div>
-              )}
-
-              {/* Disabled mode config */}
-              {(settings.turn_detection?.config?.start_of_speech?.mode ??
-                "vad") === "disabled" && (
-                <div className="mt-3 pl-3 border-l-2 border-agora-accent-blue/30">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">
-                    disabled_config
-                  </p>
-                  <FormField
-                    label="Strategy"
-                    hint="Append = queue user speech; Ignored = discard input while agent is active."
-                  >
-                    <CustomSelect
-                      value={
-                        settings.turn_detection?.config?.start_of_speech
-                          ?.disabled_config?.strategy ?? "append"
-                      }
-                      onChange={(v) =>
-                        setSettings({
-                          ...settings,
-                          turn_detection: {
-                            ...settings.turn_detection,
-                            mode: "default",
-                            config: {
-                              ...settings.turn_detection?.config,
-                              start_of_speech: {
-                                ...settings.turn_detection?.config
-                                  ?.start_of_speech,
-                                mode: "disabled",
-                                disabled_config: {
-                                  strategy: v as "append" | "ignored",
-                                },
-                              },
-                            },
-                          },
-                        })
-                      }
-                      options={[
-                        { value: "append", label: "Append" },
-                        { value: "ignored", label: "Ignored" },
-                      ]}
-                    />
-                  </FormField>
-                </div>
-              )}
             </CollapsibleSubSection>
 
             {/* config.end_of_speech - Collapsible */}
@@ -3675,7 +4515,7 @@ const AgentSettingsSidebarContent: React.FC<{
             >
               <FormField
                 label="Mode"
-                hint="VAD = fixed silence duration; Semantic = model decides (more natural)."
+                hint="VAD uses silence, Semantic uses context, and Manual waits for a client EOS marker over RTM."
                 tooltip="End-of-speech detection mode."
               >
                 <CustomSelect
@@ -3684,7 +4524,7 @@ const AgentSettingsSidebarContent: React.FC<{
                     "vad"
                   }
                   onChange={(v) => {
-                    const mode = v as "vad" | "semantic";
+                    const mode = v as "vad" | "semantic" | "manual";
                     const end = settings.turn_detection?.config?.end_of_speech;
                     const currentSilence =
                       end?.mode === "semantic"
@@ -3692,6 +4532,18 @@ const AgentSettingsSidebarContent: React.FC<{
                         : (end?.vad_config?.silence_duration_ms ?? 640);
                     setSettings({
                       ...settings,
+                      ...(mode === "manual"
+                        ? {
+                            advanced_features: {
+                              ...settings.advanced_features,
+                              enable_rtm: true,
+                            },
+                            parameters: {
+                              ...settings.parameters,
+                              data_channel: "rtm" as const,
+                            },
+                          }
+                        : {}),
                       turn_detection: {
                         ...settings.turn_detection,
                         mode: "default",
@@ -3705,13 +4557,16 @@ const AgentSettingsSidebarContent: React.FC<{
                                     silence_duration_ms: currentSilence,
                                   },
                                 }
-                              : {
+                              : mode === "semantic"
+                                ? {
                                   mode: "semantic",
                                   semantic_config: {
                                     silence_duration_ms: 320,
                                     max_wait_ms: 3000,
+                                    pause_state_enabled: true,
                                   },
-                                },
+                                  }
+                                : { mode: "manual" },
                         },
                       },
                     });
@@ -3719,6 +4574,7 @@ const AgentSettingsSidebarContent: React.FC<{
                   options={[
                     { value: "vad", label: "VAD" },
                     { value: "semantic", label: "Semantic" },
+                    { value: "manual", label: "Manual EOS (RTM)" },
                   ]}
                 />
               </FormField>
@@ -3802,6 +4658,10 @@ const AgentSettingsSidebarContent: React.FC<{
                                     settings.turn_detection?.config
                                       ?.end_of_speech?.semantic_config
                                       ?.max_wait_ms ?? 3000,
+                                  pause_state_enabled:
+                                    settings.turn_detection?.config
+                                      ?.end_of_speech?.semantic_config
+                                      ?.pause_state_enabled ?? true,
                                 },
                               },
                             },
@@ -3839,6 +4699,10 @@ const AgentSettingsSidebarContent: React.FC<{
                                       ?.silence_duration_ms ?? 320,
                                   max_wait_ms:
                                     parseInt(e.target.value, 10) || 3000,
+                                  pause_state_enabled:
+                                    settings.turn_detection?.config
+                                      ?.end_of_speech?.semantic_config
+                                      ?.pause_state_enabled ?? true,
                                 },
                               },
                             },
@@ -3847,9 +4711,150 @@ const AgentSettingsSidebarContent: React.FC<{
                       }
                     />
                   </FormField>
+                  <Toggle
+                    label="Enable semantic pause state"
+                    checked={
+                      settings.turn_detection?.config?.end_of_speech
+                        ?.semantic_config?.pause_state_enabled ?? true
+                    }
+                    onChange={(pause_state_enabled) =>
+                      setSettings({
+                        ...settings,
+                        turn_detection: {
+                          ...settings.turn_detection,
+                          mode: "default",
+                          config: {
+                            ...settings.turn_detection?.config,
+                            end_of_speech: {
+                              mode: "semantic",
+                              semantic_config: {
+                                silence_duration_ms:
+                                  settings.turn_detection?.config
+                                    ?.end_of_speech?.semantic_config
+                                    ?.silence_duration_ms ?? 320,
+                                max_wait_ms:
+                                  settings.turn_detection?.config
+                                    ?.end_of_speech?.semantic_config
+                                    ?.max_wait_ms ?? 3000,
+                                pause_state_enabled,
+                              },
+                            },
+                          },
+                        },
+                      })
+                    }
+                    hint="Publishes the pause state for semantic end-of-speech handling."
+                  />
                 </div>
               )}
             </CollapsibleSubSection>
+          </CollapsibleSubSection>
+
+          <CollapsibleSubSection
+            title="Interruption"
+            description="Current v2.11 interruption policy, separate from turn detection"
+            isOpen={advancedSubsections.interruption}
+            onToggle={() => toggleAdvancedSubsection("interruption")}
+          >
+            <Toggle
+              label="Allow interruption"
+              checked={settings.interruption?.enable ?? true}
+              onChange={(enable) =>
+                setSettings({
+                  ...settings,
+                  interruption: {
+                    ...settings.interruption,
+                    enable,
+                    mode: enable
+                      ? (settings.interruption?.mode ?? "start_of_speech")
+                      : undefined,
+                    disabled_config: settings.interruption?.disabled_config ?? {
+                      strategy: "append",
+                    },
+                  },
+                })
+              }
+            />
+            {(settings.interruption?.enable ?? true) ? (
+              <>
+                <FormField label="Interruption mode">
+                  <CustomSelect
+                    value={settings.interruption?.mode ?? "start_of_speech"}
+                    onChange={(mode) =>
+                      setSettings({
+                        ...settings,
+                        interruption: {
+                          ...settings.interruption,
+                          enable: true,
+                          mode: mode as "start_of_speech" | "keywords",
+                        },
+                      })
+                    }
+                    options={[
+                      {
+                        value: "start_of_speech",
+                        label: "Any detected speech",
+                      },
+                      { value: "keywords", label: "Trigger keywords only" },
+                    ]}
+                  />
+                </FormField>
+                {settings.interruption?.mode === "keywords" && (
+                  <FormField
+                    label="Interruption keywords"
+                    hint="One phrase per line."
+                  >
+                    <Textarea
+                      rows={3}
+                      value={(
+                        settings.interruption.keywords_config
+                          ?.trigger_keywords ?? []
+                      ).join("\n")}
+                      onChange={(event) =>
+                        setSettings({
+                          ...settings,
+                          interruption: {
+                            ...settings.interruption,
+                            enable: true,
+                            mode: "keywords",
+                            keywords_config: {
+                              trigger_keywords: event.target.value
+                                .split("\n")
+                                .map((keyword) => keyword.trim())
+                                .filter(Boolean),
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </FormField>
+                )}
+              </>
+            ) : (
+              <FormField label="When interruption is disabled">
+                <CustomSelect
+                  value={
+                    settings.interruption?.disabled_config?.strategy ?? "append"
+                  }
+                  onChange={(strategy) =>
+                    setSettings({
+                      ...settings,
+                      interruption: {
+                        ...settings.interruption,
+                        enable: false,
+                        disabled_config: {
+                          strategy: strategy as "append" | "ignore",
+                        },
+                      },
+                    })
+                  }
+                  options={[
+                    { value: "append", label: "Append input to next turn" },
+                    { value: "ignore", label: "Ignore input" },
+                  ]}
+                />
+              </FormField>
+            )}
           </CollapsibleSubSection>
 
           {/* Filler words */}
@@ -3979,10 +4984,209 @@ const AgentSettingsSidebarContent: React.FC<{
 
           <CollapsibleSubSection
             title="Features"
-            description="SAL, RTM, Tools"
+            description="Runtime events, data channel, farewell, SAL, and tools"
             isOpen={advancedSubsections.features}
             onToggle={() => toggleAdvancedSubsection("features")}
           >
+            <Toggle
+              label="Enable metrics"
+              checked={settings.parameters?.enable_metrics ?? false}
+              onChange={(enable_metrics) =>
+                setSettings({
+                  ...settings,
+                  parameters: { ...settings.parameters, enable_metrics },
+                })
+              }
+              hint="Publishes live module metrics to the client toolkit."
+            />
+            <Toggle
+              label="Pipeline error messages"
+              checked={settings.parameters?.enable_error_message ?? false}
+              onChange={(enable_error_message) =>
+                setSettings({
+                  ...settings,
+                  parameters: {
+                    ...settings.parameters,
+                    enable_error_message,
+                  },
+                })
+              }
+              hint="Publishes ASR, LLM/MLLM, TTS, and context errors to the client toolkit."
+            />
+            <FormField label="Audio scenario">
+              <CustomSelect
+                value={settings.parameters?.audio_scenario ?? "default"}
+                onChange={(audio_scenario) =>
+                  setSettings({
+                    ...settings,
+                    parameters: {
+                      ...settings.parameters,
+                      audio_scenario: audio_scenario as
+                        | "default"
+                        | "chorus"
+                        | "aiserver",
+                    },
+                  })
+                }
+                options={[
+                  { value: "default", label: "Default" },
+                  { value: "chorus", label: "Chorus" },
+                  { value: "aiserver", label: "AI server optimized" },
+                ]}
+              />
+            </FormField>
+            <Toggle
+              label="Opt out of data collection"
+              checked={settings.parameters?.opt_out ?? false}
+              onChange={(opt_out) =>
+                setSettings({
+                  ...settings,
+                  parameters: { ...settings.parameters, opt_out },
+                })
+              }
+            />
+            <Toggle
+              label="Enable silence reminder"
+              checked={(settings.parameters?.silence_config?.timeout_ms ?? 0) > 0}
+              onChange={(enabled) =>
+                setSettings({
+                  ...settings,
+                  parameters: {
+                    ...settings.parameters,
+                    silence_config: {
+                      ...settings.parameters?.silence_config,
+                      action:
+                        settings.parameters?.silence_config?.action === "think"
+                          ? "think"
+                          : "speak",
+                      timeout_ms: enabled ? 10000 : 0,
+                    },
+                  },
+                })
+              }
+            />
+            <FormField label="Silence action">
+              <CustomSelect
+                value={
+                  settings.parameters?.silence_config?.action === "think"
+                    ? "think"
+                    : "speak"
+                }
+                onChange={(action) =>
+                  setSettings({
+                    ...settings,
+                    parameters: {
+                      ...settings.parameters,
+                      silence_config: {
+                        ...settings.parameters?.silence_config,
+                        action: action as "speak" | "think",
+                      },
+                    },
+                  })
+                }
+                options={[
+                  { value: "speak", label: "Speak prompt" },
+                  { value: "think", label: "Send prompt to LLM" },
+                ]}
+              />
+            </FormField>
+            {(settings.parameters?.silence_config?.timeout_ms ?? 0) > 0 && (
+              <div className="grid grid-cols-1 gap-2">
+                <FormField label="Silence timeout (ms)">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={60000}
+                    value={
+                      settings.parameters?.silence_config?.timeout_ms ?? 0
+                    }
+                    onChange={(event) =>
+                      setSettings({
+                        ...settings,
+                        parameters: {
+                          ...settings.parameters,
+                          silence_config: {
+                            ...settings.parameters?.silence_config,
+                            action:
+                              settings.parameters?.silence_config?.action ===
+                              "think"
+                                ? "think"
+                                : "speak",
+                            timeout_ms: Number(event.target.value),
+                          },
+                        },
+                      })
+                    }
+                  />
+                </FormField>
+                <FormField label="Silence message">
+                  <Input
+                    value={settings.parameters?.silence_config?.content ?? ""}
+                    onChange={(event) =>
+                      setSettings({
+                        ...settings,
+                        parameters: {
+                          ...settings.parameters,
+                          silence_config: {
+                            ...settings.parameters?.silence_config,
+                            action:
+                              settings.parameters?.silence_config?.action ===
+                              "think"
+                                ? "think"
+                                : "speak",
+                            content: event.target.value,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </FormField>
+              </div>
+            )}
+            <Toggle
+              label="Graceful farewell"
+              checked={
+                settings.parameters?.farewell_config?.graceful_enabled ?? false
+              }
+              onChange={(graceful_enabled) =>
+                setSettings({
+                  ...settings,
+                  parameters: {
+                    ...settings.parameters,
+                    farewell_config: {
+                      ...settings.parameters?.farewell_config,
+                      graceful_enabled,
+                    },
+                  },
+                })
+              }
+            />
+            {(settings.parameters?.farewell_config?.graceful_enabled ??
+              false) && (
+              <FormField label="Farewell timeout (seconds)">
+                <Input
+                  type="number"
+                  min={0}
+                  value={
+                    settings.parameters?.farewell_config
+                      ?.graceful_timeout_seconds ?? 30
+                  }
+                  onChange={(event) =>
+                    setSettings({
+                      ...settings,
+                      parameters: {
+                        ...settings.parameters,
+                        farewell_config: {
+                          ...settings.parameters?.farewell_config,
+                          graceful_enabled: true,
+                          graceful_timeout_seconds: Number(event.target.value),
+                        },
+                      },
+                    })
+                  }
+                />
+              </FormField>
+            )}
             <Toggle
               label="Enable SAL"
               checked={settings.advanced_features?.enable_sal ?? false}
@@ -4084,9 +5288,13 @@ const AgentSettingsSidebarContent: React.FC<{
                     ...settings.advanced_features,
                     enable_rtm: checked,
                   },
+                  parameters: {
+                    ...settings.parameters,
+                    data_channel: checked ? "rtm" : "datastream",
+                  },
                 })
               }
-              hint="Enables Signaling; use RTM for transcripts, state, chat."
+              hint="RTM enables state, chat, and manual turns. Off uses RTC datastream for transcripts."
             />
             <Toggle
               label="Enable Tools"

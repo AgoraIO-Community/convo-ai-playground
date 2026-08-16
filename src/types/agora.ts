@@ -15,13 +15,18 @@ export type LLMVendor =
   | "coze"
   | "dify"
   | "minimax"
+  | "xai"
   | "custom";
+
+export type CredentialMode = "managed" | "byok";
+export type LLMEngineVendor = "openai" | "azure" | "xai" | "custom";
 
 // --- MCP (Model Context Protocol) Server ---
 /** Transport protocol for MCP; Agora docs document streamable_http */
-export type MCPTransport = "sse" | "http" | "streamable_http";
+export type MCPTransport = "streamable_http" | "sse" | "http";
 
 export interface MCPServerConfig {
+  [key: string]: unknown;
   /** Unique identifier for the MCP server (max 48 chars, letters/numbers) */
   name: string;
   /** Endpoint URL of the MCP server */
@@ -53,27 +58,37 @@ export interface MCPToolInfo {
  */
 export interface LLMGreetingConfigs {
   mode?: "single_every" | "single_first";
+  delay_ms?: number;
+  interruptable?: boolean;
+  audio_download_timeout_ms?: number;
+  audio_pcm_sample_rate?: 16000 | 24000;
 }
 
 export interface LLMConfig {
+  /** Agora-managed provider credentials or bring-your-own-key. */
+  credential_mode?: CredentialMode;
+  /** Engine provider protocol. UI presets remain separate from this field. */
+  vendor?: LLMEngineVendor;
   /** LLM API endpoint URL (required) */
   url: string;
   /** API key for authentication (required) */
   api_key: string;
-  /** Custom headers as JSON string (e.g., for Anthropic) */
-  headers?: string;
+  /** Custom headers merged into LLM requests. */
+  headers?: Record<string, string> | string;
   /** System messages for context */
   system_messages?: Array<{ role: string; content: string }>;
   /** Initial greeting when agent starts */
   greeting_message?: string;
+  /** Publicly accessible greeting audio URL. */
+  greeting_audio_url?: string;
   /** Greeting broadcast mode (v2.2+). When omitted, server defaults to single_every. */
   greeting_configs?: LLMGreetingConfigs;
   /** Fallback message on failure */
   failure_message?: string;
   /** Number of conversation history messages (1-1024, default 32) */
   max_history?: number;
-  /** LLM style: "openai" or "anthropic" */
-  style?: "openai" | "anthropic";
+  /** Request style supported by the current engine. */
+  style?: "openai" | "gemini" | "anthropic" | "dify";
   /** Model-specific parameters */
   params?: {
     model: string;
@@ -98,15 +113,48 @@ export interface LLMConfig {
 
 // --- TTS Vendors ---
 export type TTSVendor =
-  | "microsoft"
-  | "elevenlabs"
-  | "minimax"
+  | "amazon"
   | "cartesia"
-  | "openai"
-  | "fish_audio"
+  | "deepgram"
+  | "elevenlabs"
+  | "fishaudio"
+  | "generic_http"
   | "google"
-  | "polly"
-  | "deepgram";
+  | "gradium"
+  | "humeai"
+  | "microsoft"
+  | "minimax"
+  | "mistral"
+  | "murf"
+  | "openai"
+  | "rime"
+  | "sarvam"
+  | "typecast"
+  | "xai"
+  /** @deprecated Saved-settings alias; migrated to fishaudio. */
+  | "fish_audio"
+  /** @deprecated Saved-settings alias; migrated to amazon. */
+  | "polly";
+
+export type TTSApiVendor =
+  | "amazon"
+  | "cartesia"
+  | "deepgram"
+  | "elevenlabs"
+  | "fishaudio"
+  | "generic_http"
+  | "google"
+  | "gradium"
+  | "humeai"
+  | "microsoft"
+  | "minimax"
+  | "mistral"
+  | "murf"
+  | "openai"
+  | "rime"
+  | "sarvam"
+  | "typecast"
+  | "xai";
 
 export interface TTSMicrosoftParams {
   key: string;
@@ -138,7 +186,7 @@ export interface TTSOpenAIParams {
 }
 
 /**
- * Deepgram TTS params (v2.6+ — see release notes).
+ * Deepgram TTS params supported by the current engine.
  * Adds streaming-friendly TTS via Deepgram's Aura family of models.
  */
 export interface TTSDeepgramParams {
@@ -154,8 +202,15 @@ export interface TTSDeepgramParams {
 }
 
 export interface TTSConfig {
+  credential_mode?: CredentialMode;
   /** TTS vendor (required) */
-  vendor: TTSVendor;
+  vendor: TTSVendor | TTSApiVendor;
+  /** OpenAI-compatible endpoint for generic_http. */
+  url?: string;
+  /** Request headers for generic_http. */
+  headers?: Record<string, string>;
+  /** Pattern identifiers omitted from synthesized speech. */
+  skip_patterns?: number[];
   /** Vendor-specific parameters */
   params:
     | TTSMicrosoftParams
@@ -174,7 +229,23 @@ export type ASRVendor =
   | "google"
   | "speechmatics"
   | "assemblyai"
+  | "amazon"
+  | "sarvam"
+  | "xai"
+  /** @deprecated Saved-settings alias; migrated to amazon. */
   | "transcribe";
+
+export type ASRApiVendor =
+  | "ares"
+  | "microsoft"
+  | "deepgram"
+  | "openai"
+  | "google"
+  | "speechmatics"
+  | "assemblyai"
+  | "amazon"
+  | "sarvam"
+  | "xai";
 
 export interface ASRMicrosoftParams {
   key: string;
@@ -192,10 +263,13 @@ export interface ASRDeepgramParams {
 }
 
 export interface ASRConfig {
+  credential_mode?: CredentialMode;
   /** ASR vendor (default: ares) */
-  vendor?: ASRVendor;
+  vendor?: ASRVendor | ASRApiVendor;
   /** Language code (BCP-47, e.g., en-US) */
   language?: string;
+  /** v2.11 ARES keyword boosting; maximum 128 entries. */
+  keywords?: string[];
   /** Vendor-specific parameters */
   params?: ASRMicrosoftParams | ASRDeepgramParams | Record<string, unknown>;
 }
@@ -221,9 +295,10 @@ export interface TurnDetectionDisabledConfig {
 }
 
 export type TurnDetectionStartOfSpeechMode = "vad" | "keywords" | "disabled";
+export type CurrentTurnDetectionStartOfSpeechMode = "vad" | "manual";
 
 export interface TurnDetectionStartOfSpeech {
-  mode: TurnDetectionStartOfSpeechMode;
+  mode: TurnDetectionStartOfSpeechMode | CurrentTurnDetectionStartOfSpeechMode;
   vad_config?: TurnDetectionVadConfig;
   keywords_config?: TurnDetectionKeywordsConfig;
   disabled_config?: TurnDetectionDisabledConfig;
@@ -238,9 +313,10 @@ export interface TurnDetectionEndOfSpeechVadConfig {
 export interface TurnDetectionEndOfSpeechSemanticConfig {
   silence_duration_ms?: number;
   max_wait_ms?: number;
+  pause_state_enabled?: boolean;
 }
 
-export type TurnDetectionEndOfSpeechMode = "vad" | "semantic";
+export type TurnDetectionEndOfSpeechMode = "vad" | "semantic" | "manual";
 
 export interface TurnDetectionEndOfSpeech {
   mode: TurnDetectionEndOfSpeechMode;
@@ -260,6 +336,17 @@ export interface TurnDetectionConfig {
   mode?: "default";
   /** Detailed configuration for conversation turn detection */
   config?: TurnDetectionConfigConfig;
+}
+
+export interface InterruptionKeywordsConfig {
+  trigger_keywords?: string[];
+}
+
+export interface InterruptionConfig {
+  enable?: boolean;
+  mode?: "start_of_speech" | "keywords";
+  keywords_config?: InterruptionKeywordsConfig;
+  disabled_config?: { strategy?: "append" | "ignore" };
 }
 
 // --- Filler Words ---
@@ -299,26 +386,43 @@ export interface AdvancedFeaturesConfig {
   enable_sal?: boolean;
   /** Enable function calling / tools */
   enable_tools?: boolean;
-  /** Enable MLLM (Multimodal LLM) for voice-to-voice */
+  /** @deprecated Use mllm.enable. Retained only while migrating saved settings. */
   enable_mllm?: boolean;
 }
 
 // --- Agent Parameters ---
 export interface AgentParametersConfig {
-  /** Enable farewell detection */
+  /** @deprecated Use farewell_config.graceful_enabled. */
   enable_farewell?: boolean;
-  /** Custom farewell phrases */
+  /** @deprecated No current v2.11 equivalent. */
   farewell_phrases?: string[];
-  /** Data channel mode: "rtc" for RTC stream, "rtm" for RTM signaling */
-  data_channel?: "rtc" | "rtm";
+  data_channel?: "datastream" | "rtm" | "rtc";
+  enable_metrics?: boolean;
+  enable_error_message?: boolean;
+  audio_scenario?: "default" | "chorus" | "aiserver";
+  opt_out?: boolean;
+  silence_config?: {
+    action?: "speak" | "think" | "none";
+    timeout_ms?: number;
+    content?: string;
+  };
+  farewell_config?: {
+    graceful_enabled?: boolean;
+    graceful_timeout_seconds?: number;
+  };
 }
 
 // --- MLLM (Multimodal LLM, voice-to-voice) ---
-/** MLLM provider style. v2.6 introduces vendor-specific MLLM turn detection. */
+/** Legacy MLLM provider style retained only for saved-settings migration. */
 export type MllmStyle = "openai" | "gemini";
+export type MllmVendor = "openai" | "azure" | "gemini" | "vertexai" | "xai";
 
-/** Vendor-specific MLLM turn detection (v2.6 cleaner refactor). */
+/** Current vendor-specific MLLM turn detection. */
 export interface MllmTurnDetection {
+  mode?: "agora_vad" | "server_vad" | "semantic_vad";
+  agora_vad_config?: Record<string, unknown>;
+  server_vad_config?: Record<string, unknown>;
+  semantic_vad_config?: Record<string, unknown>;
   /**
    * Provider for MLLM turn detection.
    * - `openai`: OpenAI Realtime server VAD / semantic VAD config.
@@ -333,33 +437,49 @@ export interface MllmTurnDetection {
 
 /** MLLM (voice-to-voice) configuration. */
 export interface MllmConfig {
-  /** MLLM provider style (openai for OpenAI Realtime; gemini for Gemini Live). */
+  enable?: boolean;
+  vendor?: MllmVendor;
+  /** @deprecated Use vendor. Retained only while migrating saved settings. */
   style?: MllmStyle;
   /** API endpoint URL */
   url?: string;
   /** API key for authentication */
   api_key?: string;
-  /** Custom headers as JSON string */
+  /** @deprecated Not part of the current REST MLLM contract. */
   headers?: string;
   /** Provider-specific parameters (model, voice, temperature, etc.) */
   params?: Record<string, unknown>;
-  /** System messages for context */
+  /** Current short-term memory items (OpenAI Realtime item structure). */
+  messages?: Record<string, unknown>[];
+  /** @deprecated Migrated to messages. */
   system_messages?: Array<{ role: string; content: string }>;
   /** Greeting message */
   greeting_message?: string;
-  /** Failure message */
+  /** @deprecated Not part of the current REST MLLM contract. */
   failure_message?: string;
-  /** Conversation history depth */
+  /** @deprecated Not part of the current REST MLLM contract. */
   max_history?: number;
   /**
-   * MLLM turn detection — refactored in v2.6 for clearer vendor-specific control
-   * across OpenAI Realtime and Google Gemini Live.
+   * Current MLLM turn detection across supported realtime providers.
    */
   turn_detection?: MllmTurnDetection;
   /** Allowed input modalities */
-  input_modalities?: ("text" | "image" | "audio")[];
-  /** Allowed output modalities */
-  output_modalities?: ("text" | "audio")[];
+  input_modalities?: ("audio" | "text")[];
+  /** Current MLLM output is text plus audio. */
+  output_modalities?: ["text", "audio"];
+}
+
+export type GeofenceArea =
+  | "GLOBAL"
+  | "NORTH_AMERICA"
+  | "EUROPE"
+  | "ASIA"
+  | "INDIA"
+  | "JAPAN";
+
+export interface GeofenceConfig {
+  area: GeofenceArea;
+  exclude_area?: Exclude<GeofenceArea, "GLOBAL">;
 }
 
 // --- /think endpoint (v2.6) ---
@@ -377,7 +497,7 @@ export type ThinkActionInterruptIgnore = "interrupt" | "ignore";
 export interface ThinkOptions {
   /** The custom instruction text to inject (required). */
   text: string;
-  /** Action when agent is listening. Default: "inject". */
+  /** Action when agent is listening. Engine v2.7+ default: "interrupt". */
   on_listening_action?: ThinkActionInjectIgnore;
   /** Action when agent is thinking. Default: "interrupt". */
   on_thinking_action?: ThinkActionInterruptIgnore;
@@ -546,14 +666,21 @@ export interface IAgentTranscription {
 
 // --- Complete Agent Settings (used for UI) ---
 export interface AgentSettings {
+  /** Local persisted-settings schema version; never sent to Agora. */
+  schemaVersion?: number;
   // Agent name (required, unique identifier)
   name: string;
+
+  /** Optional published Studio pipeline used as the base configuration. */
+  pipeline_id?: string;
+
+  /** Restricts the regions the engine can access. */
+  geofence?: GeofenceConfig;
 
   // LLM Configuration (required)
   llm: LLMConfig;
 
-  // MLLM Configuration (optional; used when advanced_features.enable_mllm = true).
-  // v2.6 cleaner turn handling lives under mllm.turn_detection.
+  // MLLM Configuration (optional; used when mllm.enable = true).
   mllm?: MllmConfig;
 
   // TTS Configuration (required)
@@ -570,6 +697,9 @@ export interface AgentSettings {
 
   // Turn detection settings (Agora v2 config format; only sent when enable_turn_detection is true)
   turn_detection?: TurnDetectionConfig;
+
+  // Interruption strategy, separate from turn detection in the current API.
+  interruption?: InterruptionConfig;
 
   // Filler words (played while waiting for LLM)
   filler_words?: FillerWordsConfig;
@@ -595,7 +725,7 @@ export interface VendorPreset {
   defaultModel?: string;
   models?: string[];
   requiresApiKey: boolean;
-  style?: "openai" | "anthropic";
+  style?: "openai" | "gemini" | "anthropic" | "dify";
   headers?: string;
 }
 
@@ -678,6 +808,15 @@ export const LLM_PRESETS: Record<LLMVendor, VendorPreset> = {
     requiresApiKey: true,
     style: "openai",
   },
+  xai: {
+    label: "xAI Grok",
+    value: "xai",
+    url: "https://api.x.ai/v1/chat/completions",
+    defaultModel: "grok-4-latest",
+    models: ["grok-4-latest", "grok-3-latest"],
+    requiresApiKey: true,
+    style: "openai",
+  },
   custom: {
     label: "Custom (OpenAI-compatible)",
     value: "custom",
@@ -734,6 +873,11 @@ export const TTS_PRESETS: Record<
     value: "fish_audio",
     requiresApiKey: true,
   },
+  fishaudio: {
+    label: "Fish Audio",
+    value: "fishaudio",
+    requiresApiKey: true,
+  },
   google: {
     label: "Google TTS (Beta)",
     value: "google",
@@ -744,8 +888,13 @@ export const TTS_PRESETS: Record<
     value: "polly",
     requiresApiKey: true,
   },
+  amazon: {
+    label: "Amazon Polly",
+    value: "amazon",
+    requiresApiKey: true,
+  },
   deepgram: {
-    label: "Deepgram (v2.6)",
+    label: "Deepgram",
     value: "deepgram",
     requiresApiKey: true,
     defaultModel: "aura-asteria-en",
@@ -763,6 +912,51 @@ export const TTS_PRESETS: Record<
       "aura-helios-en",
       "aura-zeus-en",
     ],
+  },
+  generic_http: {
+    label: "Generic HTTP (v2.11)",
+    value: "generic_http",
+    requiresApiKey: false,
+  },
+  gradium: {
+    label: "Gradium",
+    value: "gradium",
+    requiresApiKey: true,
+  },
+  humeai: {
+    label: "Hume AI",
+    value: "humeai",
+    requiresApiKey: true,
+  },
+  mistral: {
+    label: "Mistral",
+    value: "mistral",
+    requiresApiKey: true,
+  },
+  murf: {
+    label: "Murf",
+    value: "murf",
+    requiresApiKey: true,
+  },
+  rime: {
+    label: "Rime",
+    value: "rime",
+    requiresApiKey: true,
+  },
+  sarvam: {
+    label: "Sarvam",
+    value: "sarvam",
+    requiresApiKey: true,
+  },
+  typecast: {
+    label: "Typecast (v2.11)",
+    value: "typecast",
+    requiresApiKey: true,
+  },
+  xai: {
+    label: "xAI",
+    value: "xai",
+    requiresApiKey: true,
   },
 };
 
@@ -807,6 +1001,21 @@ export const ASR_PRESETS: Record<ASRVendor, VendorPreset> = {
   transcribe: {
     label: "Amazon Transcribe (Beta)",
     value: "transcribe",
+    requiresApiKey: true,
+  },
+  amazon: {
+    label: "Amazon Transcribe",
+    value: "amazon",
+    requiresApiKey: true,
+  },
+  sarvam: {
+    label: "Sarvam",
+    value: "sarvam",
+    requiresApiKey: true,
+  },
+  xai: {
+    label: "xAI",
+    value: "xai",
     requiresApiKey: true,
   },
 };

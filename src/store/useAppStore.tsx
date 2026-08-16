@@ -12,6 +12,12 @@ import type {
 } from "@/types/agora";
 import { EAgentState, ETranscriptRenderMode } from "@/types/agora";
 import type { AgentSessionRecord } from "@/types/agentTurns";
+import type {
+  AgentErrorEvent,
+  AgentMetricEvent,
+  ManualTurnResult,
+  MessageErrorEvent,
+} from "@/lib/agora/clientToolkitAdapter";
 import {
   getTranscriptTransport,
   withTranscriptTransport,
@@ -101,6 +107,10 @@ interface AppState {
   agentSessionHistory: AgentSessionRecord[];
   instructionLog: InstructionLogEntry[];
   agentQueryStatus: AgentQueryStatus | null;
+  liveAgentMetrics: AgentMetricEvent[];
+  liveAgentErrors: AgentErrorEvent[];
+  liveMessageErrors: MessageErrorEvent[];
+  manualTurnResults: ManualTurnResult[];
 
   setAgentActive: (
     agentId: string,
@@ -133,6 +143,10 @@ interface AppState {
   setTranscriptionMode: (mode: "rtc" | "rtm") => void;
   setTranscriptRenderMode: (mode: ETranscriptRenderMode) => void;
   setAgentQueryStatus: (status: AgentQueryStatus | null) => void;
+  addLiveAgentMetric: (event: AgentMetricEvent) => void;
+  addLiveAgentError: (event: AgentErrorEvent) => void;
+  addLiveMessageError: (event: MessageErrorEvent) => void;
+  addManualTurnResult: (event: ManualTurnResult) => void;
 
   toasts: Toast[];
   addToast: (message: string, type: ToastType) => void;
@@ -157,6 +171,10 @@ const INITIAL_AGENT_STATE = {
   instructionLog: [],
   transcriptionMode: "rtm" as const,
   agentQueryStatus: null,
+  liveAgentMetrics: [],
+  liveAgentErrors: [],
+  liveMessageErrors: [],
+  manualTurnResults: [],
 };
 
 const useAppStore = create<AppState>((set) => ({
@@ -287,6 +305,22 @@ const useAppStore = create<AppState>((set) => ({
   setTranscriptRenderMode: (transcriptRenderMode) =>
     set({ transcriptRenderMode }),
   setAgentQueryStatus: (agentQueryStatus) => set({ agentQueryStatus }),
+  addLiveAgentMetric: (event) =>
+    set((state) => ({
+      liveAgentMetrics: [...state.liveAgentMetrics, event].slice(-100),
+    })),
+  addLiveAgentError: (event) =>
+    set((state) => ({
+      liveAgentErrors: [...state.liveAgentErrors, event].slice(-100),
+    })),
+  addLiveMessageError: (event) =>
+    set((state) => ({
+      liveMessageErrors: [...state.liveMessageErrors, event].slice(-100),
+    })),
+  addManualTurnResult: (event) =>
+    set((state) => ({
+      manualTurnResults: [...state.manualTurnResults, event].slice(-100),
+    })),
 
   toasts: [],
   addToast: (message, type) =>

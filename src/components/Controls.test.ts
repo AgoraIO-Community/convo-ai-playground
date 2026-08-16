@@ -139,7 +139,7 @@ describe("Controls", () => {
       "42",
       expect.objectContaining({
         advanced_features: expect.objectContaining({ enable_rtm: false }),
-        parameters: expect.objectContaining({ data_channel: "rtc" }),
+        parameters: expect.objectContaining({ data_channel: "datastream" }),
       }),
       expect.any(Object),
     );
@@ -171,7 +171,7 @@ describe("Controls", () => {
         customJoinPayload: expect.objectContaining({
           properties: expect.objectContaining({
             advanced_features: expect.objectContaining({ enable_rtm: false }),
-            parameters: expect.objectContaining({ data_channel: "rtc" }),
+            parameters: expect.objectContaining({ data_channel: "datastream" }),
           }),
         }),
       }),

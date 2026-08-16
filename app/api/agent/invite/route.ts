@@ -15,6 +15,11 @@ import {
   LEMON_SLICE_DEFAULT_QUALITY,
   isHttpUrl,
 } from "@/constants/lemonSlice";
+import { migrateAgentSettings } from "@/lib/agora/engineConfig";
+import {
+  buildJoinProperties,
+  validateAgentSettings,
+} from "@/lib/agora/joinPayload";
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE!;
@@ -44,14 +49,14 @@ function resolveMllmApiKey(mllm: MllmConfig): string {
   }
 
   return (
-    (mllm.style ?? "openai") === "gemini"
+    (mllm.vendor ?? mllm.style ?? "openai") === "gemini"
       ? process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY
       : process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY
   )?.trim() ?? "";
 }
 
 function getMllmKeyEnvironmentName(mllm: MllmConfig): string {
-  return (mllm.style ?? "openai") === "gemini"
+  return (mllm.vendor ?? mllm.style ?? "openai") === "gemini"
     ? "GEMINI_API_KEY"
     : "OPENAI_API_KEY";
 }
@@ -60,38 +65,50 @@ function buildMllmPayload(
   mllm: MllmConfig,
   apiKey: string,
 ): Record<string, unknown> {
-  const style = mllm.style ?? "openai";
+  const normalizedMllm =
+    migrateAgentSettings({
+      name: "mllm-normalizer",
+      llm: { url: "", api_key: "" },
+      tts: { vendor: "openai", params: {} },
+      advanced_features: { enable_mllm: true },
+      mllm,
+    }).mllm ?? mllm;
+  const vendor = normalizedMllm.vendor ?? "openai";
   const payload: Record<string, unknown> = {
-    style,
+    ...normalizedMllm,
+    enable: true,
+    vendor,
     api_key: apiKey,
   };
-  if (mllm.url) payload.url = mllm.url;
-  if (mllm.headers) payload.headers = mllm.headers;
-  if (mllm.params && Object.keys(mllm.params).length > 0) {
-    payload.params = mllm.params;
+  delete payload.style;
+  delete payload.headers;
+  delete payload.system_messages;
+  delete payload.failure_message;
+  delete payload.max_history;
+  if (normalizedMllm.url) payload.url = normalizedMllm.url;
+  if (
+    normalizedMllm.params &&
+    Object.keys(normalizedMllm.params).length > 0
+  ) {
+    payload.params = normalizedMllm.params;
   }
-  if (mllm.system_messages && mllm.system_messages.length > 0) {
-    payload.system_messages = mllm.system_messages;
+  if (normalizedMllm.greeting_message) {
+    payload.greeting_message = normalizedMllm.greeting_message;
   }
-  if (mllm.greeting_message) payload.greeting_message = mllm.greeting_message;
-  if (mllm.failure_message) payload.failure_message = mllm.failure_message;
-  if (mllm.max_history != null) payload.max_history = mllm.max_history;
-  if (mllm.input_modalities && mllm.input_modalities.length > 0) {
-    payload.input_modalities = mllm.input_modalities;
+  if (
+    normalizedMllm.input_modalities &&
+    normalizedMllm.input_modalities.length > 0
+  ) {
+    payload.input_modalities = normalizedMllm.input_modalities;
   }
-  if (mllm.output_modalities && mllm.output_modalities.length > 0) {
-    payload.output_modalities = mllm.output_modalities;
+  if (
+    normalizedMllm.output_modalities &&
+    normalizedMllm.output_modalities.length > 0
+  ) {
+    payload.output_modalities = normalizedMllm.output_modalities;
   }
-  if (mllm.turn_detection) {
-    const provider = mllm.turn_detection.provider ?? style;
-    const turnDetection: Record<string, unknown> = { provider };
-    if (provider === "openai" && mllm.turn_detection.openai) {
-      turnDetection.openai = mllm.turn_detection.openai;
-    }
-    if (provider === "gemini" && mllm.turn_detection.gemini) {
-      turnDetection.gemini = mllm.turn_detection.gemini;
-    }
-    payload.turn_detection = turnDetection;
+  if (normalizedMllm.turn_detection) {
+    payload.turn_detection = normalizedMllm.turn_detection;
   }
   return payload;
 }
@@ -99,7 +116,11 @@ function buildMllmPayload(
 async function handleCustomPayloadJoin(
   channelName: string,
   uid: string,
-  customJoinPayload: { name: string; properties: Record<string, unknown> },
+  customJoinPayload: {
+    name: string;
+    pipeline_id?: string;
+    properties: Record<string, unknown>;
+  },
   username?: string,
 ): Promise<NextResponse> {
   const agentUid = 0;
@@ -129,7 +150,11 @@ async function handleCustomPayloadJoin(
     typeof properties.advanced_features === "object"
       ? (properties.advanced_features as Record<string, unknown>)
       : undefined;
-  const useMllm = customAdvancedFeatures?.enable_mllm === true;
+  const customMllm =
+    properties.mllm && typeof properties.mllm === "object"
+      ? (properties.mllm as MllmConfig)
+      : undefined;
+  const useMllm = customMllm?.enable === true;
   if (useMllm) {
     const mllm = properties.mllm as MllmConfig | undefined;
     if (!mllm) {
@@ -154,17 +179,19 @@ async function handleCustomPayloadJoin(
     delete properties.llm;
     delete properties.tts;
     delete properties.asr;
+    const currentAdvancedFeatures = { ...(customAdvancedFeatures ?? {}) };
+    delete currentAdvancedFeatures.enable_mllm;
     properties.advanced_features = {
-      ...customAdvancedFeatures,
-      enable_mllm: true,
+      ...currentAdvancedFeatures,
       enable_tools: false,
     };
   } else {
     delete properties.mllm;
     if (customAdvancedFeatures) {
+      const currentAdvancedFeatures = { ...customAdvancedFeatures };
+      delete currentAdvancedFeatures.enable_mllm;
       properties.advanced_features = {
-        ...customAdvancedFeatures,
-        enable_mllm: false,
+        ...currentAdvancedFeatures,
       };
     }
   }
@@ -178,7 +205,11 @@ async function handleCustomPayloadJoin(
         : {}) as Record<string, unknown>;
     llm.template_variables = { ...existing, username: username.trim() };
   }
-  if (llm && shouldInjectServerKey(llm.api_key as string)) {
+  if (
+    llm &&
+    llm.credential_mode !== "managed" &&
+    shouldInjectServerKey(llm.api_key as string)
+  ) {
     llm.api_key = (
       process.env.LLM_API_KEY ||
       process.env.NEXT_PUBLIC_LLM_API_KEY ||
@@ -189,7 +220,11 @@ async function handleCustomPayloadJoin(
   const tts = properties.tts as Record<string, unknown> | undefined;
   if (tts?.params && typeof tts.params === "object") {
     const p = tts.params as Record<string, unknown>;
-    if (shouldInjectServerKey(p.key as string)) {
+    if (
+      tts.credential_mode !== "managed" &&
+      tts.vendor !== "generic_http" &&
+      shouldInjectServerKey(p.key as string)
+    ) {
       const vendor = (tts.vendor ?? "microsoft") as string;
       if (vendor === "elevenlabs")
         p.key = (
@@ -210,7 +245,7 @@ async function handleCustomPayloadJoin(
           process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY ||
           ""
         ).trim();
-      else
+      else if (vendor === "microsoft")
         p.key = (
           process.env.MICROSOFT_TTS_KEY ||
           process.env.NEXT_PUBLIC_MICROSOFT_TTS_KEY ||
@@ -232,7 +267,10 @@ async function handleCustomPayloadJoin(
   if (asr?.params && typeof asr.params === "object") {
     const p = asr.params as Record<string, unknown>;
     const keyVal = (p.api_key as string) ?? (p.key as string) ?? "";
-    if (shouldInjectServerKey(keyVal)) {
+    if (
+      asr.credential_mode !== "managed" &&
+      shouldInjectServerKey(keyVal)
+    ) {
       const vendor = (asr.vendor ?? "ares") as string;
       if (vendor === "deepgram")
         p.api_key = (
@@ -421,7 +459,45 @@ async function handleCustomPayloadJoin(
     }
   }
 
-  const joinPayload = { name: customJoinPayload.name, properties };
+  const customPassthrough = Object.fromEntries(
+    ["geofence", "labels", "rtc"].flatMap((key) =>
+      properties[key] === undefined ? [] : [[key, properties[key]]],
+    ),
+  );
+  const canonicalCustomSettings = migrateAgentSettings({
+    name: customJoinPayload.name,
+    ...properties,
+  });
+  const customValidation = validateAgentSettings(canonicalCustomSettings);
+  if (!customValidation.valid) {
+    return NextResponse.json(
+      {
+        error: "Invalid Conversational AI v2.11 custom payload",
+        validationErrors: customValidation.errors,
+      },
+      { status: 400 },
+    );
+  }
+  const canonicalCustomProperties = buildJoinProperties({
+    settings: canonicalCustomSettings,
+    runtime: {
+      channel: channelName,
+      token: agentRtcToken,
+      agentRtcUid: String(agentUid),
+      remoteRtcUids: [String(uid)],
+      username: username?.trim() || "Guest",
+    },
+  });
+  for (const key of Object.keys(properties)) delete properties[key];
+  Object.assign(properties, canonicalCustomProperties, customPassthrough);
+
+  const joinPayload = {
+    name: customJoinPayload.name,
+    ...(customJoinPayload.pipeline_id
+      ? { pipeline_id: customJoinPayload.pipeline_id }
+      : {}),
+    properties,
+  };
   const authHeader = Buffer.from(`${CUSTOMER_ID}:${CUSTOMER_SECRET}`).toString(
     "base64",
   );
@@ -508,7 +584,11 @@ type InviteBody = {
   uid: string;
   agentSettings: AgentSettings;
   useCustomPayload?: boolean;
-  customJoinPayload?: { name: string; properties: Record<string, unknown> };
+  customJoinPayload?: {
+    name: string;
+    pipeline_id?: string;
+    properties: Record<string, unknown>;
+  };
   /** User display name; injected as llm.template_variables.username for greeting */
   username?: string;
 };
@@ -579,6 +659,7 @@ export async function POST(request: NextRequest) {
 
     // Build the join payload for Agora Conversational AI API v2
     // Based on: https://docs.agora.io/en/conversational-ai/rest-api/agent/join
+    const normalizedAgentSettings = migrateAgentSettings(agentSettings);
     const {
       llm,
       tts,
@@ -587,9 +668,9 @@ export async function POST(request: NextRequest) {
       advanced_features,
       parameters,
       avatar,
-    } = agentSettings;
-    const mllm = (agentSettings as { mllm?: MllmConfig }).mllm;
-    const useMllm = advanced_features?.enable_mllm === true;
+    } = normalizedAgentSettings;
+    const mllm = normalizedAgentSettings.mllm;
+    const useMllm = mllm?.enable === true;
 
     if (useMllm && !mllm) {
       return NextResponse.json(
@@ -638,7 +719,8 @@ export async function POST(request: NextRequest) {
       !v || v.trim() === "" || v === "__USE_SERVER__" || v === "***MASKED***";
 
     // Build LLM config (inject server key when client does not provide one)
-    const llmApiKey = shouldInjectServerKey(llm.api_key)
+    const llmApiKey =
+      llm.credential_mode !== "managed" && shouldInjectServerKey(llm.api_key)
       ? (
           process.env.LLM_API_KEY ||
           process.env.NEXT_PUBLIC_LLM_API_KEY ||
@@ -646,9 +728,10 @@ export async function POST(request: NextRequest) {
         ).trim()
       : (llm.api_key ?? "").trim();
     const llmPayload: Record<string, unknown> = {
-      url: llm.url,
+      ...llm,
       api_key: llmApiKey,
     };
+    delete llmPayload.mcp_servers;
 
     if (llm.headers) {
       llmPayload.headers = llm.headers;
@@ -672,8 +755,8 @@ export async function POST(request: NextRequest) {
       llmPayload.greeting_message = llm.greeting_message;
     }
 
-    if (llm.greeting_configs?.mode) {
-      llmPayload.greeting_configs = { mode: llm.greeting_configs.mode };
+    if (llm.greeting_configs) {
+      llmPayload.greeting_configs = { ...llm.greeting_configs };
     }
 
     if (llm.failure_message) {
@@ -731,7 +814,11 @@ export async function POST(request: NextRequest) {
     // Build TTS config (inject server key when client does not provide one)
     const ttsParams = { ...tts.params } as Record<string, unknown>;
     const ttsKey = (ttsParams.key as string) ?? "";
-    if (shouldInjectServerKey(ttsKey)) {
+    if (
+      tts.credential_mode !== "managed" &&
+      tts.vendor !== "generic_http" &&
+      shouldInjectServerKey(ttsKey)
+    ) {
       const vendor = (tts.vendor ?? "microsoft") as string;
       if (vendor === "elevenlabs") {
         ttsParams.key = (
@@ -752,7 +839,7 @@ export async function POST(request: NextRequest) {
           process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY ||
           ""
         ).trim();
-      } else {
+      } else if (vendor === "microsoft") {
         ttsParams.key = (
           process.env.MICROSOFT_TTS_KEY ||
           process.env.NEXT_PUBLIC_MICROSOFT_TTS_KEY ||
@@ -769,7 +856,7 @@ export async function POST(request: NextRequest) {
       }
     }
     const ttsPayload: Record<string, unknown> = {
-      vendor: tts.vendor,
+      ...tts,
       params: ttsParams,
     };
 
@@ -791,8 +878,7 @@ export async function POST(request: NextRequest) {
     // Build ASR config (optional); inject server key when client does not provide one
     const asrPayload: Record<string, unknown> | undefined = asr
       ? {
-          ...(asr.vendor && { vendor: asr.vendor }),
-          ...(asr.language && { language: asr.language }),
+          ...asr,
           ...(asr.params &&
             Object.keys(asr.params).length > 0 && {
               params: { ...asr.params },
@@ -802,7 +888,7 @@ export async function POST(request: NextRequest) {
     if (asrPayload?.params && typeof asrPayload.params === "object") {
       const p = asrPayload.params as Record<string, unknown>;
       const keyVal = (p.api_key as string) ?? (p.key as string) ?? "";
-      if (shouldInjectServerKey(keyVal)) {
+      if (asr?.credential_mode !== "managed" && shouldInjectServerKey(keyVal)) {
         const vendor = (asr?.vendor ?? "ares") as string;
         if (vendor === "deepgram") {
           p.api_key = (
@@ -1038,6 +1124,43 @@ export async function POST(request: NextRequest) {
         data_channel: useRtm ? "rtm" : "datastream",
       };
     }
+
+    // Normalize the UI/persisted settings once, then rebuild through the
+    // canonical v2.11 boundary. The code above still resolves provider keys
+    // and compatibility defaults; it no longer owns the outgoing schema.
+    const canonicalSettings = migrateAgentSettings({
+      ...normalizedAgentSettings,
+      llm: { ...llm, ...llmPayload },
+      tts: ttsPayload,
+      ...(asrPayload ? { asr: asrPayload } : {}),
+      ...(useMllm && mllm
+        ? { mllm: { ...mllm, enable: true, api_key: mllmApiKey } }
+        : {}),
+    });
+    const validation = validateAgentSettings(canonicalSettings);
+    if (!validation.valid) {
+      return NextResponse.json(
+        {
+          error: "Invalid Conversational AI v2.11 settings",
+          validationErrors: validation.errors,
+        },
+        { status: 400 },
+      );
+    }
+    const canonicalProperties = buildJoinProperties({
+      settings: canonicalSettings,
+      runtime: {
+        channel: channelName,
+        token: agentRtcToken,
+        agentRtcUid: String(agentUid),
+        remoteRtcUids,
+        username: displayName,
+      },
+    });
+    for (const key of Object.keys(propertiesPayload)) {
+      delete propertiesPayload[key];
+    }
+    Object.assign(propertiesPayload, canonicalProperties);
 
     // Avatar RTC UID for client (returned when avatar is enabled)
     let avatarRtcUidReturn: string | null = null;
@@ -1297,8 +1420,11 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    const joinPayload = {
-      name: agentSettings.name,
+    let joinPayload = {
+      name: normalizedAgentSettings.name,
+      ...(normalizedAgentSettings.pipeline_id
+        ? { pipeline_id: normalizedAgentSettings.pipeline_id }
+        : {}),
       properties: propertiesPayload,
     };
 
@@ -1350,16 +1476,26 @@ export async function POST(request: NextRequest) {
     }
     console.log("=====================================================\n");
 
-    const agoraResponse = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${authHeader}`,
-      },
-      body: JSON.stringify(joinPayload),
-    });
+    const sendJoin = (payload: typeof joinPayload) =>
+      fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Basic ${authHeader}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-    const responseData = await agoraResponse.json();
+    let agoraResponse = await sendJoin(joinPayload);
+    let responseData = await agoraResponse.json();
+    if (agoraResponse.status === 409) {
+      joinPayload = {
+        ...joinPayload,
+        name: `${joinPayload.name}-${crypto.randomUUID()}`,
+      };
+      agoraResponse = await sendJoin(joinPayload);
+      responseData = await agoraResponse.json();
+    }
 
     console.log("\n========== AGORA CONVERSATIONAL AI RESPONSE ==========");
     console.log("Status:", agoraResponse.status, agoraResponse.statusText);
@@ -1368,8 +1504,16 @@ export async function POST(request: NextRequest) {
 
     if (!agoraResponse.ok) {
       console.error("Agora Conversational AI join failed:", responseData);
+      const errorDetails =
+        responseData && typeof responseData === "object"
+          ? (responseData as Record<string, unknown>)
+          : {};
       return NextResponse.json(
-        { error: "Failed to start AI agent", details: responseData },
+        {
+          error: "Failed to start AI agent",
+          ...errorDetails,
+          details: responseData,
+        },
         { status: agoraResponse.status },
       );
     }

@@ -51,7 +51,7 @@ describe("call state", () => {
 
     const state = useAppStore.getState();
     expect(state.agentSettings?.advanced_features?.enable_rtm).toBe(false);
-    expect(state.agentSettings?.parameters?.data_channel).toBe("rtc");
+    expect(state.agentSettings?.parameters?.data_channel).toBe("datastream");
     expect(state.transcriptionMode).toBe("rtc");
   });
 });

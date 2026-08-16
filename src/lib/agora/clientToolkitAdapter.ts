@@ -4,13 +4,18 @@ import {
   TranscriptHelperMode,
   TurnStatus,
   type AgentTranscription,
+  type AgentManualEosEvent,
+  type AgentMetric,
   type AgoraVoiceAIConfig,
   type AgoraVoiceAIEventHandlers,
   type ChatMessageImage,
   type ChatMessageText,
+  type ModuleError,
   type RTCEngine,
   type RTMEngine,
   type TranscriptHelperItem,
+  type UserManualEosEvent,
+  type UserManualSosEvent,
   type UserTranscription,
 } from "agora-agent-client-toolkit";
 import type { EAgentState, ITranscriptHelperItem } from "@/types/agora";
@@ -151,6 +156,8 @@ export interface ToolkitClient {
     agentUserId: string,
     message: ChatMessageText | ChatMessageImage,
   ): Promise<void>;
+  manualSOS(agentUserId: string, requestId?: string): Promise<string>;
+  manualEOS(agentUserId: string, requestId?: string): Promise<string>;
 }
 
 interface ToolkitProvider {
@@ -166,13 +173,41 @@ export interface StartAgoraClientToolkitOptions {
   enableLog?: boolean;
   onTranscript(snapshot: NormalizedTranscript): void;
   onAgentState(state: EAgentState): void;
+  onAgentMetric?(event: AgentMetricEvent): void;
+  onAgentError?(event: AgentErrorEvent): void;
+  onMessageError?(event: MessageErrorEvent): void;
+  onManualTurnResult?(event: ManualTurnResult): void;
 }
+
+export interface AgentMetricEvent {
+  agentUserId: string;
+  metric: AgentMetric;
+}
+
+export interface AgentErrorEvent {
+  agentUserId: string;
+  error: ModuleError;
+}
+
+export interface MessageErrorEvent {
+  agentUserId: string;
+  error: Parameters<
+    AgoraVoiceAIEventHandlers[AgoraVoiceAIEvents.MESSAGE_ERROR]
+  >[1];
+}
+
+export type ManualTurnResult =
+  | { kind: "user_sos"; agentUserId: string; event: UserManualSosEvent }
+  | { kind: "user_eos"; agentUserId: string; event: UserManualEosEvent }
+  | { kind: "agent_eos"; agentUserId: string; event: AgentManualEosEvent };
 
 export interface AgoraClientToolkitSession {
   chat(
     agentUserId: string,
     message: ChatMessageText | ChatMessageImage,
   ): Promise<void>;
+  manualSOS(agentUserId: string, requestId?: string): Promise<string>;
+  manualEOS(agentUserId: string, requestId?: string): Promise<string>;
   setRenderMode(mode: ETranscriptRenderMode): void;
   destroy(): void;
 }
@@ -321,15 +356,40 @@ export async function startAgoraClientToolkit(
       const state = toAppAgentState(event.state);
       if (state) options.onAgentState(state);
     };
+  const handleAgentMetric: AgoraVoiceAIEventHandlers[AgoraVoiceAIEvents.AGENT_METRICS] =
+    (agentUserId, metric) => options.onAgentMetric?.({ agentUserId, metric });
+  const handleAgentError: AgoraVoiceAIEventHandlers[AgoraVoiceAIEvents.AGENT_ERROR] =
+    (agentUserId, error) => options.onAgentError?.({ agentUserId, error });
+  const handleMessageError: AgoraVoiceAIEventHandlers[AgoraVoiceAIEvents.MESSAGE_ERROR] =
+    (agentUserId, error) => options.onMessageError?.({ agentUserId, error });
+  const handleUserManualSos: AgoraVoiceAIEventHandlers[AgoraVoiceAIEvents.USER_MANUAL_SOS] =
+    (agentUserId, event) =>
+      options.onManualTurnResult?.({ kind: "user_sos", agentUserId, event });
+  const handleUserManualEos: AgoraVoiceAIEventHandlers[AgoraVoiceAIEvents.USER_MANUAL_EOS] =
+    (agentUserId, event) =>
+      options.onManualTurnResult?.({ kind: "user_eos", agentUserId, event });
+  const handleAgentManualEos: AgoraVoiceAIEventHandlers[AgoraVoiceAIEvents.AGENT_MANUAL_EOS] =
+    (agentUserId, event) =>
+      options.onManualTurnResult?.({ kind: "agent_eos", agentUserId, event });
 
   client.on(AgoraVoiceAIEvents.TRANSCRIPT_UPDATED, handleTranscript);
   client.on(AgoraVoiceAIEvents.AGENT_STATE_CHANGED, handleAgentState);
+  client.on(AgoraVoiceAIEvents.AGENT_METRICS, handleAgentMetric);
+  client.on(AgoraVoiceAIEvents.AGENT_ERROR, handleAgentError);
+  client.on(AgoraVoiceAIEvents.MESSAGE_ERROR, handleMessageError);
+  client.on(AgoraVoiceAIEvents.USER_MANUAL_SOS, handleUserManualSos);
+  client.on(AgoraVoiceAIEvents.USER_MANUAL_EOS, handleUserManualEos);
+  client.on(AgoraVoiceAIEvents.AGENT_MANUAL_EOS, handleAgentManualEos);
   client.subscribeMessage(options.channelId);
 
   let destroyed = false;
 
   return {
     chat: (agentUserId, message) => client.chat(agentUserId, message),
+    manualSOS: (agentUserId, requestId) =>
+      client.manualSOS(agentUserId, requestId),
+    manualEOS: (agentUserId, requestId) =>
+      client.manualEOS(agentUserId, requestId),
     setRenderMode: (mode) => {
       if (destroyed || mode === currentRenderMode) return;
       configureRenderMode(mode, true);
@@ -340,6 +400,12 @@ export async function startAgoraClientToolkit(
       clearWordTimingFallback();
       client.off(AgoraVoiceAIEvents.TRANSCRIPT_UPDATED, handleTranscript);
       client.off(AgoraVoiceAIEvents.AGENT_STATE_CHANGED, handleAgentState);
+      client.off(AgoraVoiceAIEvents.AGENT_METRICS, handleAgentMetric);
+      client.off(AgoraVoiceAIEvents.AGENT_ERROR, handleAgentError);
+      client.off(AgoraVoiceAIEvents.MESSAGE_ERROR, handleMessageError);
+      client.off(AgoraVoiceAIEvents.USER_MANUAL_SOS, handleUserManualSos);
+      client.off(AgoraVoiceAIEvents.USER_MANUAL_EOS, handleUserManualEos);
+      client.off(AgoraVoiceAIEvents.AGENT_MANUAL_EOS, handleAgentManualEos);
       options.rtcEngine.off("audio-pts", handleAudioPts);
       client.unsubscribe();
       client.destroy();

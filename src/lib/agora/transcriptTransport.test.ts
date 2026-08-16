@@ -22,7 +22,7 @@ describe("transcript transport", () => {
     expect(getTranscriptTransport(settings)).toBe("rtc");
     expect(settings).toMatchObject({
       advanced_features: { enable_rtm: false },
-      parameters: { data_channel: "rtc" },
+      parameters: { data_channel: "datastream" },
     });
   });
 
@@ -47,7 +47,7 @@ describe("transcript transport", () => {
 
     expect(payload.properties).toMatchObject({
       advanced_features: { enable_rtm: false },
-      parameters: { data_channel: "rtc" },
+      parameters: { data_channel: "datastream" },
     });
   });
 

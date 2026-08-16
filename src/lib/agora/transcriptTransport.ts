@@ -25,7 +25,7 @@ export function withTranscriptTransport(
     },
     parameters: {
       ...settings.parameters,
-      data_channel: transport,
+      data_channel: transport === "rtm" ? "rtm" : "datastream",
     },
   };
 }
@@ -59,7 +59,7 @@ export function withCustomPayloadTranscriptTransport(
       },
       parameters: {
         ...parameters,
-        data_channel: enableRtm ? "rtm" : "rtc",
+        data_channel: enableRtm ? "rtm" : "datastream",
       },
     },
   };

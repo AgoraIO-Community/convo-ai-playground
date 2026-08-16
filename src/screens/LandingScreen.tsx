@@ -87,7 +87,7 @@ const LandingScreen: React.FC = () => {
             href={AGORA_CONVO_AI_RELEASE_NOTES_URL}
             target="_blank"
             rel="noopener noreferrer"
-            title="View Agora Conversational AI v2.6 release notes"
+            title="View Agora Conversational AI v2.11 release notes"
             className="group mt-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm text-xs sm:text-[13px] text-gray-300 hover:text-white hover:border-[var(--agora-accent-blue)]/40 hover:bg-[var(--agora-accent-blue)]/10 transition-all duration-200 animate-fade-in-up"
             style={{
               animationDelay: "0.6s",
@@ -100,7 +100,7 @@ const LandingScreen: React.FC = () => {
             </span>
             <span>
               Powered by Agora Conversational AI{" "}
-              <span className="font-semibold text-white">v2.6</span>
+              <span className="font-semibold text-white">v2.11</span>
             </span>
             <svg
               className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity"

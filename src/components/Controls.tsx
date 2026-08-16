@@ -5,9 +5,11 @@ import {
   MdCallEnd,
   MdMic,
   MdMicOff,
+  MdPlayArrow,
   MdSettings,
   MdSmartToy,
   MdSync,
+  MdStop,
   MdVideocam,
   MdVideocamOff,
 } from "react-icons/md";
@@ -30,6 +32,10 @@ import { sanitizeCustomJoinPayload } from "@/utils/customPayloadSanitize";
 
 interface ControlsProps {
   onEndCall: () => Promise<void>;
+  manualTurnControls?: {
+    onStart?: () => Promise<string>;
+    onEnd?: () => Promise<string>;
+  };
 }
 
 function hasUpdatableChanges(
@@ -65,7 +71,10 @@ function hasRestartRequiredChanges(
   );
 }
 
-const Controls: React.FC<ControlsProps> = ({ onEndCall }) => {
+const Controls: React.FC<ControlsProps> = ({
+  onEndCall,
+  manualTurnControls,
+}) => {
   const audioMuted = useAppStore((state) => state.audioMuted);
   const videoMuted = useAppStore((state) => state.videoMuted);
   const channelId = useAppStore((state) => state.channelId);
@@ -84,6 +93,37 @@ const Controls: React.FC<ControlsProps> = ({ onEndCall }) => {
   const { configureRtm, toggleLocalAudio, toggleLocalVideo } = useAgora();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
+  const [manualTurnPending, setManualTurnPending] = useState<
+    "start" | "end" | null
+  >(null);
+
+  const handleManualTurn = useCallback(
+    async (kind: "start" | "end") => {
+      const action =
+        kind === "start"
+          ? manualTurnControls?.onStart
+          : manualTurnControls?.onEnd;
+      if (!action || manualTurnPending) return;
+      setManualTurnPending(kind);
+      try {
+        await action();
+        showToast(
+          kind === "start"
+            ? "Manual start-of-speech marker sent"
+            : "Manual end-of-speech marker sent",
+          "success",
+        );
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : "Manual turn request failed",
+          "error",
+        );
+      } finally {
+        setManualTurnPending(null);
+      }
+    },
+    [manualTurnControls, manualTurnPending],
+  );
 
   const handleAudioToggle = useCallback(async (): Promise<void> => {
     try {
@@ -287,6 +327,32 @@ const Controls: React.FC<ControlsProps> = ({ onEndCall }) => {
           >
             {audioMuted ? <MdMicOff /> : <MdMic />}
           </button>
+          {manualTurnControls && (
+            <div className="flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-300/10 p-1">
+              {manualTurnControls.onStart && <button
+                type="button"
+                onClick={() => void handleManualTurn("start")}
+                disabled={manualTurnPending !== null}
+                className={`${circleButton} h-9 w-auto gap-1 px-2 text-sm sm:h-10 sm:w-auto`}
+                aria-label="Manual start of speech"
+                title="Send manual start-of-speech marker"
+              >
+                <MdPlayArrow />
+                <span className="hidden sm:inline">Start turn</span>
+              </button>}
+              {manualTurnControls.onEnd && <button
+                type="button"
+                onClick={() => void handleManualTurn("end")}
+                disabled={manualTurnPending !== null}
+                className={`${circleButton} h-9 w-auto gap-1 px-2 text-sm sm:h-10 sm:w-auto`}
+                aria-label="Manual end of speech"
+                title="Send manual end-of-speech marker"
+              >
+                <MdStop />
+                <span className="hidden sm:inline">End turn</span>
+              </button>}
+            </div>
+          )}
           <button
             type="button"
             onClick={() => void handleVideoToggle()}

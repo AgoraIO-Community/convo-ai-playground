@@ -3,6 +3,7 @@ import {
   AgoraVoiceAIEvents,
   CovSubRenderController,
   MessageType,
+  ModuleType,
   TranscriptHelperMode,
   TurnStatus,
   type AgoraVoiceAIConfig,
@@ -36,6 +37,8 @@ class FakeToolkitClient implements ToolkitClient {
   public isSubscribed = false;
   public isDestroyed = false;
   public subscribeCount = 0;
+  public manualSosCalls: Array<{ agentUserId: string; requestId?: string }> = [];
+  public manualEosCalls: Array<{ agentUserId: string; requestId?: string }> = [];
 
   on<Event extends AgoraVoiceAIEvents>(
     event: Event,
@@ -76,6 +79,16 @@ class FakeToolkitClient implements ToolkitClient {
   }
 
   async chat(): Promise<void> {}
+
+  async manualSOS(agentUserId: string, requestId?: string): Promise<string> {
+    this.manualSosCalls.push({ agentUserId, requestId });
+    return requestId ?? "generated-sos";
+  }
+
+  async manualEOS(agentUserId: string, requestId?: string): Promise<string> {
+    this.manualEosCalls.push({ agentUserId, requestId });
+    return requestId ?? "generated-eos";
+  }
 
   emit<Event extends AgoraVoiceAIEvents>(
     event: Event,
@@ -399,6 +412,142 @@ describe("startAgoraClientToolkit", () => {
       reason: "done",
     });
     expect(states).toEqual([EAgentState.SPEAKING]);
+  });
+
+  it("forwards v2.11 metrics, pipeline errors, chat errors, and manual turn results", async () => {
+    const client = new FakeToolkitClient();
+    const metrics: unknown[] = [];
+    const agentErrors: unknown[] = [];
+    const messageErrors: unknown[] = [];
+    const manualResults: unknown[] = [];
+    const session = await startAgoraClientToolkit(
+      {
+        rtcEngine: createFakeRtcEngine(),
+        rtmEngine: {
+          publish: async () => undefined,
+          addEventListener() {},
+          removeEventListener() {},
+        },
+        channelId: "channel-1",
+        localRtcUid: "42",
+        renderMode: ETranscriptRenderMode.TEXT,
+        onTranscript() {},
+        onAgentState() {},
+        onAgentMetric: (event) => metrics.push(event),
+        onAgentError: (event) => agentErrors.push(event),
+        onMessageError: (event) => messageErrors.push(event),
+        onManualTurnResult: (event) => manualResults.push(event),
+      },
+      { init: async () => client },
+    );
+
+    client.emit(AgoraVoiceAIEvents.AGENT_METRICS, "agent-7", {
+      type: ModuleType.LLM,
+      name: "first_token_latency",
+      value: 245,
+      timestamp: 100,
+    });
+    client.emit(AgoraVoiceAIEvents.AGENT_ERROR, "agent-7", {
+      type: ModuleType.TTS,
+      code: 5001,
+      message: "TTS unavailable",
+      timestamp: 110,
+    });
+    client.emit(AgoraVoiceAIEvents.MESSAGE_ERROR, "agent-7", {
+      type: "text",
+      code: 4001,
+      message: "Message rejected",
+      timestamp: 120,
+    });
+    client.emit(AgoraVoiceAIEvents.USER_MANUAL_SOS, "agent-7", {
+      eventId: "evt-sos",
+      timestamp: 130,
+      payload: {
+        success: true,
+        requestId: "req-sos",
+        turnId: 8,
+        errorMessage: null,
+      },
+    });
+    client.emit(AgoraVoiceAIEvents.USER_MANUAL_EOS, "agent-7", {
+      eventId: "evt-eos",
+      timestamp: 140,
+      payload: {
+        success: false,
+        requestId: "req-eos",
+        turnId: null,
+        errorMessage: "No turns available for EOS labeling.",
+      },
+    });
+    client.emit(AgoraVoiceAIEvents.AGENT_MANUAL_EOS, "agent-7", {
+      eventId: "evt-auto-eos",
+      timestamp: 150,
+      payload: { reason: "timeout", maxDurationMs: 30000, turnId: 8 },
+    });
+
+    expect(metrics).toEqual([
+      {
+        agentUserId: "agent-7",
+        metric: expect.objectContaining({ name: "first_token_latency" }),
+      },
+    ]);
+    expect(agentErrors).toEqual([
+      {
+        agentUserId: "agent-7",
+        error: expect.objectContaining({ code: 5001 }),
+      },
+    ]);
+    expect(messageErrors).toEqual([
+      {
+        agentUserId: "agent-7",
+        error: expect.objectContaining({ code: 4001 }),
+      },
+    ]);
+    expect(manualResults).toEqual([
+      expect.objectContaining({ kind: "user_sos", agentUserId: "agent-7" }),
+      expect.objectContaining({ kind: "user_eos", agentUserId: "agent-7" }),
+      expect.objectContaining({ kind: "agent_eos", agentUserId: "agent-7" }),
+    ]);
+
+    session.destroy();
+    client.emit(AgoraVoiceAIEvents.AGENT_METRICS, "agent-7", {
+      type: ModuleType.LLM,
+      name: "late",
+      value: 1,
+      timestamp: 200,
+    });
+    expect(metrics).toHaveLength(1);
+  });
+
+  it("delegates manual SOS and EOS and returns their request IDs", async () => {
+    const client = new FakeToolkitClient();
+    const session = await startAgoraClientToolkit(
+      {
+        rtcEngine: createFakeRtcEngine(),
+        rtmEngine: {
+          publish: async () => undefined,
+          addEventListener() {},
+          removeEventListener() {},
+        },
+        channelId: "channel-1",
+        localRtcUid: "42",
+        renderMode: ETranscriptRenderMode.TEXT,
+        onTranscript() {},
+        onAgentState() {},
+      },
+      { init: async () => client },
+    );
+
+    await expect(session.manualSOS("agent-7", "sos-1")).resolves.toBe("sos-1");
+    await expect(session.manualEOS("agent-7")).resolves.toBe("generated-eos");
+    expect(client.manualSosCalls).toEqual([
+      { agentUserId: "agent-7", requestId: "sos-1" },
+    ]);
+    expect(client.manualEosCalls).toEqual([
+      { agentUserId: "agent-7", requestId: undefined },
+    ]);
+
+    session.destroy();
   });
 
   it("waits for delayed audio PTS before revealing a word-timed agent turn", async () => {

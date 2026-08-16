@@ -43,5 +43,14 @@ export interface ConversationTurn {
 }
 
 export interface AgentTurnsResponse {
+  agent_id?: string;
+  name?: string;
+  channel?: string;
+  total_turn_count?: number;
+  pagination?: {
+    cursor?: string;
+    next_cursor?: string;
+    limit?: number;
+  };
   turns: ConversationTurn[];
 }

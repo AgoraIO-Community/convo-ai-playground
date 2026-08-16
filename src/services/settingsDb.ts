@@ -4,6 +4,10 @@
  */
 
 import type { AgentSettings } from "@/types/agora";
+import {
+  ENGINE_SETTINGS_SCHEMA_VERSION,
+  migrateAgentSettings,
+} from "@/lib/agora/engineConfig";
 
 const DB_NAME = "MyAgoraAppSettings";
 const DB_VERSION = 1;
@@ -49,7 +53,7 @@ export async function getAgentSettings(): Promise<AgentSettings | null> {
   try {
     const db = await openDb();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readonly");
+      const tx = db.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
       const request = store.get("agent" as unknown as IDBValidKey);
       request.onerror = () => {
@@ -57,11 +61,26 @@ export async function getAgentSettings(): Promise<AgentSettings | null> {
         reject(request.error);
       };
       request.onsuccess = () => {
+        const row = request.result as StoredAgentSettingsRow | undefined;
+        const decoded = decodeStoredAgentSettings(row);
+        if (
+          row &&
+          decoded &&
+          row.schemaVersion !== ENGINE_SETTINGS_SCHEMA_VERSION
+        ) {
+          const migrationWrite = store.put(encodeStoredAgentSettings(decoded));
+          migrationWrite.onerror = () => {
+            db.close();
+            reject(migrationWrite.error);
+          };
+          migrationWrite.onsuccess = () => {
+            db.close();
+            resolve(decoded);
+          };
+          return;
+        }
         db.close();
-        const row = request.result as
-          | { id: SettingsId; value: AgentSettings }
-          | undefined;
-        resolve(row?.value ?? null);
+        resolve(decoded);
       };
     });
   } catch (err) {
@@ -71,6 +90,29 @@ export async function getAgentSettings(): Promise<AgentSettings | null> {
 }
 
 const MASKED_PLACEHOLDER = "***MASKED***";
+
+interface StoredAgentSettingsRow {
+  id: "agent";
+  schemaVersion?: number;
+  value: AgentSettings;
+}
+
+export function decodeStoredAgentSettings(
+  row: StoredAgentSettingsRow | undefined,
+): AgentSettings | null {
+  return row ? migrateAgentSettings(row.value) : null;
+}
+
+export function encodeStoredAgentSettings(
+  settings: AgentSettings,
+): StoredAgentSettingsRow {
+  const migrated = migrateAgentSettings(settings);
+  return {
+    id: "agent",
+    schemaVersion: ENGINE_SETTINGS_SCHEMA_VERSION,
+    value: maskKeysForPersistence(migrated),
+  };
+}
 
 /** Clone settings and mask API key fields so they are never persisted. */
 function maskKeysForPersistence(settings: AgentSettings): AgentSettings {
@@ -99,12 +141,12 @@ function maskKeysForPersistence(settings: AgentSettings): AgentSettings {
 export async function setAgentSettings(settings: AgentSettings): Promise<void> {
   if (!isBrowser()) return;
   try {
-    const toStore = maskKeysForPersistence(settings);
+    const toStore = encodeStoredAgentSettings(settings);
     const db = await openDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
-      const request = store.put({ id: "agent", value: toStore });
+      const request = store.put(toStore);
       request.onerror = () => {
         db.close();
         reject(request.error);
