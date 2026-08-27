@@ -226,6 +226,108 @@ describe("POST /api/agent/invite", () => {
     expect(payload.properties.tts.params).not.toHaveProperty("key");
   });
 
+  it("uses the Gemini preview join contract and injects the server ASR key", async () => {
+    process.env.GEMINI_API_KEY = "server-gemini-key";
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ agent_id: "agent-id", status: "RUNNING" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const POST = await loadPost();
+    const current = legacySettings();
+    current.asr = {
+      credential_mode: "byok",
+      vendor: "gemini",
+      language: "en-US",
+      params: {
+        api_key: "",
+        model: "gemini-3.5-transcribe-live",
+        sample_rate: 16000,
+        language: "en-US",
+        word_timestamp: true,
+      },
+    };
+
+    const response = await POST(
+      request({ channelName: "channel-a", uid: "42", agentSettings: current }),
+    );
+
+    expect(response.status).toBe(200);
+    const [url, options] = fetchSpy.mock.calls[0];
+    expect(url).toBe(
+      "https://partner.ai.agora.io/preview/api/conversational-ai-agent/v2/projects/970CA35de60c44645bbae8a215061b33/join",
+    );
+    expect(options?.headers).toMatchObject({
+      "Content-Type": "application/json",
+      "agora-feature": "gemini-live",
+    });
+    const payload = JSON.parse(String(options?.body));
+    expect(payload.properties.asr).toEqual({
+      credential_mode: "byok",
+      vendor: "gemini",
+      language: "en-US",
+      params: {
+        api_key: "server-gemini-key",
+        model: "gemini-3.5-transcribe-live",
+        sample_rate: 16000,
+        language: "en-US",
+        word_timestamp: true,
+      },
+    });
+    const logs = vi.mocked(console.log).mock.calls.flat().join(" ");
+    expect(logs).toContain("***MASKED***");
+    expect(logs).not.toContain("server-gemini-key");
+  });
+
+  it("uses the Gemini preview join contract for custom payload mode", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ agent_id: "agent-id", status: "RUNNING" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const POST = await loadPost();
+    const base = legacySettings();
+
+    const response = await POST(
+      request({
+        channelName: "channel-a",
+        uid: "42",
+        useCustomPayload: true,
+        customJoinPayload: {
+          name: "custom-gemini-agent",
+          properties: {
+            llm: base.llm,
+            tts: base.tts,
+            asr: {
+              credential_mode: "byok",
+              vendor: "gemini",
+              language: "en-US",
+              params: {
+                api_key: "custom-gemini-key",
+                model: "gemini-3.5-transcribe-live",
+                sample_rate: 16000,
+                language: "en-US",
+                word_timestamp: true,
+              },
+            },
+            advanced_features: base.advanced_features,
+            parameters: base.parameters,
+          },
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchSpy.mock.calls[0][0]).toBe(
+      "https://partner.ai.agora.io/preview/api/conversational-ai-agent/v2/projects/970CA35de60c44645bbae8a215061b33/join",
+    );
+    expect(fetchSpy.mock.calls[0][1]?.headers).toMatchObject({
+      "agora-feature": "gemini-live",
+    });
+  });
+
   it("retries once with a fresh name after an Agora 409 collision", async () => {
     const fetchSpy = vi
       .spyOn(global, "fetch")

@@ -225,6 +225,7 @@ export type ASRVendor =
   | "ares"
   | "microsoft"
   | "deepgram"
+  | "gemini"
   | "openai"
   | "google"
   | "speechmatics"
@@ -239,6 +240,7 @@ export type ASRApiVendor =
   | "ares"
   | "microsoft"
   | "deepgram"
+  | "gemini"
   | "openai"
   | "google"
   | "speechmatics"
@@ -262,6 +264,14 @@ export interface ASRDeepgramParams {
   keyterm?: string;
 }
 
+export interface ASRGeminiParams {
+  api_key: string;
+  model: "gemini-3.5-transcribe-live";
+  sample_rate: number;
+  language: string;
+  word_timestamp: boolean;
+}
+
 export interface ASRConfig {
   credential_mode?: CredentialMode;
   /** ASR vendor (default: ares) */
@@ -271,7 +281,11 @@ export interface ASRConfig {
   /** v2.11 ARES keyword boosting; maximum 128 entries. */
   keywords?: string[];
   /** Vendor-specific parameters */
-  params?: ASRMicrosoftParams | ASRDeepgramParams | Record<string, unknown>;
+  params?:
+    | ASRMicrosoftParams
+    | ASRDeepgramParams
+    | ASRGeminiParams
+    | Record<string, unknown>;
 }
 
 // --- Turn Detection (Agora join API v2 config format) ---
@@ -977,6 +991,13 @@ export const ASR_PRESETS: Record<ASRVendor, VendorPreset> = {
     requiresApiKey: true,
     defaultModel: "nova-3",
     models: ["nova-3", "nova-2", "enhanced", "base"],
+  },
+  gemini: {
+    label: "Google Gemini (Early Access)",
+    value: "gemini",
+    requiresApiKey: true,
+    defaultModel: "gemini-3.5-transcribe-live",
+    models: ["gemini-3.5-transcribe-live"],
   },
   openai: {
     label: "OpenAI Whisper (Beta)",
