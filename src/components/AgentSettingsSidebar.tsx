@@ -131,7 +131,12 @@ const getDefaultTTSVendor = (): TTSVendor => {
 // Get default ASR vendor from env
 const getDefaultASRVendor = (): ASRVendor => {
   const vendor = getEnvVar("ASR_VENDOR", "ares");
-  if (vendor === "deepgram" || vendor === "microsoft" || vendor === "ares") {
+  if (
+    vendor === "deepgram" ||
+    vendor === "microsoft" ||
+    vendor === "gemini" ||
+    vendor === "ares"
+  ) {
     return vendor;
   }
   return "ares";
@@ -194,6 +199,18 @@ const getDefaultASRConfig = (vendor: ASRVendor): ASRConfig => {
           url: getEnvVar("DEEPGRAM_URL", "wss://api.deepgram.com/v1/listen"),
           model: getEnvVar("DEEPGRAM_MODEL", "nova-2"),
           language: getEnvVar("DEEPGRAM_LANGUAGE", "en"),
+        },
+      };
+    case "gemini":
+      return {
+        vendor: "gemini",
+        language,
+        params: {
+          api_key: "",
+          model: "gemini-3.5-transcribe-live",
+          sample_rate: 16000,
+          language,
+          word_timestamp: true,
         },
       };
     case "microsoft":
@@ -890,6 +907,15 @@ const AgentSettingsSidebar: React.FC<AgentSettingsSidebarProps> = ({
         model: "nova-3",
         language: "en",
       });
+    } else if (vendor === "gemini") {
+      const language = settings.asr?.language || "en-US";
+      Object.assign(defaultParams, {
+        api_key: "",
+        model: "gemini-3.5-transcribe-live",
+        sample_rate: 16000,
+        language,
+        word_timestamp: true,
+      });
     }
 
     updateASR({
@@ -1481,7 +1507,22 @@ const AgentSettingsSidebar: React.FC<AgentSettingsSidebarProps> = ({
             <FormField label="Language" required>
               <CustomSelect
                 value={settings.asr?.language || "en-US"}
-                onChange={(v) => updateASR({ language: v })}
+                onChange={(language) =>
+                  updateASR({
+                    language,
+                    ...(selectedASRVendor === "gemini"
+                      ? {
+                          params: {
+                            ...((settings.asr?.params ?? {}) as Record<
+                              string,
+                              unknown
+                            >),
+                            language,
+                          },
+                        }
+                      : {}),
+                  })
+                }
                 options={SUPPORTED_LANGUAGES.map((lang) => ({
                   value: lang.code,
                   label: `${lang.label} (${lang.code})`,
@@ -1541,6 +1582,40 @@ const AgentSettingsSidebar: React.FC<AgentSettingsSidebarProps> = ({
                     value={getASRParam("model") || "nova-3"}
                     onChange={(v) => setASRParam("model", v)}
                     options={(ASR_PRESETS.deepgram.models ?? []).map((model) => ({ value: model, label: model }))}
+                  />
+                </FormField>
+              </>
+            )}
+            {selectedASRVendor === "gemini" && (
+              <>
+                <FormField
+                  label="API Key"
+                  required
+                  hint="Leave empty to use server key (GEMINI_API_KEY)"
+                >
+                  <Input
+                    type="password"
+                    value={maskKeyForDisplay(getASRParam("api_key"))}
+                    onChange={(event) =>
+                      keyChange(
+                        event.target.value,
+                        getASRParam("api_key"),
+                        (key) => setASRParam("api_key", key),
+                      )
+                    }
+                    placeholder="Leave empty for server key, or Gemini API key"
+                  />
+                </FormField>
+                <FormField label="Model">
+                  <CustomSelect
+                    value={
+                      getASRParam("model") || "gemini-3.5-transcribe-live"
+                    }
+                    onChange={(model) => setASRParam("model", model)}
+                    options={(ASR_PRESETS.gemini.models ?? []).map((model) => ({
+                      value: model,
+                      label: model,
+                    }))}
                   />
                 </FormField>
               </>

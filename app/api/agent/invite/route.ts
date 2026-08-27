@@ -26,6 +26,26 @@ const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE!;
 const CUSTOMER_ID = process.env.AGORA_CUSTOMER_ID!;
 const CUSTOMER_SECRET = process.env.AGORA_CUSTOMER_SECRET!;
 
+function getJoinRequestConfig(properties: Record<string, unknown>): {
+  apiUrl: string;
+  featureHeaders: Record<string, string>;
+} {
+  const asr =
+    properties.asr && typeof properties.asr === "object"
+      ? (properties.asr as Record<string, unknown>)
+      : undefined;
+  if (asr?.vendor === "gemini") {
+    return {
+      apiUrl: `https://partner.ai.agora.io/preview/api/conversational-ai-agent/v2/projects/${APP_ID}/join`,
+      featureHeaders: { "agora-feature": "gemini-live" },
+    };
+  }
+  return {
+    apiUrl: `https://api.agora.io/api/conversational-ai-agent/v2/projects/${APP_ID}/join`,
+    featureHeaders: {},
+  };
+}
+
 function shouldInjectServerKey(v: string | undefined): boolean {
   return (
     !v || v.trim() === "" || v === "__USE_SERVER__" || v === "***MASKED***"
@@ -284,6 +304,8 @@ async function handleCustomPayloadJoin(
           process.env.NEXT_PUBLIC_MICROSOFT_ASR_KEY ||
           ""
         ).trim();
+      else if (vendor === "gemini")
+        p.api_key = (process.env.GEMINI_API_KEY || "").trim();
     }
   }
 
@@ -501,7 +523,7 @@ async function handleCustomPayloadJoin(
   const authHeader = Buffer.from(`${CUSTOMER_ID}:${CUSTOMER_SECRET}`).toString(
     "base64",
   );
-  const apiUrl = `https://api.agora.io/api/conversational-ai-agent/v2/projects/${APP_ID}/join`;
+  const { apiUrl, featureHeaders } = getJoinRequestConfig(properties);
 
   const sanitized = JSON.parse(JSON.stringify(joinPayload)) as Record<
     string,
@@ -521,6 +543,17 @@ async function handleCustomPayloadJoin(
       (
         (p.tts as Record<string, unknown>).params as Record<string, unknown>
       ).key = "***MASKED***";
+    }
+    if (
+      (p.asr as Record<string, unknown>)?.params &&
+      typeof (p.asr as Record<string, unknown>).params === "object"
+    ) {
+      const asrParams = (p.asr as Record<string, unknown>).params as Record<
+        string,
+        unknown
+      >;
+      if (asrParams.api_key) asrParams.api_key = "***MASKED***";
+      if (asrParams.key) asrParams.key = "***MASKED***";
     }
     if (
       (p.avatar as Record<string, unknown>)?.params &&
@@ -554,6 +587,7 @@ async function handleCustomPayloadJoin(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Basic ${authHeader}`,
+      ...featureHeaders,
     },
     body: JSON.stringify(joinPayload),
   });
@@ -902,6 +936,8 @@ export async function POST(request: NextRequest) {
             process.env.NEXT_PUBLIC_MICROSOFT_ASR_KEY ||
             ""
           ).trim();
+        } else if (vendor === "gemini") {
+          p.api_key = (process.env.GEMINI_API_KEY || "").trim();
         }
       }
     }
@@ -1432,7 +1468,7 @@ export async function POST(request: NextRequest) {
     const authHeader = Buffer.from(
       `${CUSTOMER_ID}:${CUSTOMER_SECRET}`,
     ).toString("base64");
-    const apiUrl = `https://api.agora.io/api/conversational-ai-agent/v2/projects/${APP_ID}/join`;
+    const { apiUrl, featureHeaders } = getJoinRequestConfig(propertiesPayload);
 
     // Create a sanitized version for logging (mask sensitive data)
     const sanitizedPayload = JSON.parse(JSON.stringify(joinPayload));
@@ -1449,6 +1485,12 @@ export async function POST(request: NextRequest) {
     if (sanitizedPayload.properties?.tts?.params?.key) {
       sanitizedPayload.properties.tts.params.key = "***MASKED***";
     }
+    if (sanitizedPayload.properties?.asr?.params?.api_key) {
+      sanitizedPayload.properties.asr.params.api_key = "***MASKED***";
+    }
+    if (sanitizedPayload.properties?.asr?.params?.key) {
+      sanitizedPayload.properties.asr.params.key = "***MASKED***";
+    }
     if (sanitizedPayload.properties?.avatar?.params?.api_key) {
       sanitizedPayload.properties.avatar.params.api_key = "***MASKED***";
     }
@@ -1464,6 +1506,7 @@ export async function POST(request: NextRequest) {
     console.log("Headers:", {
       "Content-Type": "application/json",
       Authorization: "Basic ***MASKED***",
+      ...featureHeaders,
     });
     console.log("Payload:", JSON.stringify(sanitizedPayload, null, 2));
     // Verbose output remains sanitized so provider keys and RTC tokens never reach logs.
@@ -1482,6 +1525,7 @@ export async function POST(request: NextRequest) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Basic ${authHeader}`,
+          ...featureHeaders,
         },
         body: JSON.stringify(payload),
       });

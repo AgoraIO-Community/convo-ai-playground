@@ -150,6 +150,7 @@ describe("SettingsSidebar transcript transport", () => {
         "ares",
         "microsoft",
         "deepgram",
+        "gemini",
         "openai",
         "google",
         "amazon",
@@ -339,6 +340,48 @@ describe("SettingsSidebar transcript transport", () => {
     ).toHaveLength(2);
     expect(screen.queryByText("API Key", { selector: "label span" })).not.toBeInTheDocument();
     expect(screen.queryByText("Provider parameters (JSON)", { selector: "label span" })).not.toBeInTheDocument();
+  });
+
+  it("configures the documented Gemini ASR preview defaults in BYOK mode", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /ASR \(Speech Recognition\)/i }),
+    );
+    chooseFromField("Vendor", "Google Gemini (Early Access)");
+
+    expect(screen.getByText(/Gemini ASR uses Agora's early-access preview/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Gemini API Key")).toBeInTheDocument();
+    expect(getSelectButton("Model")).toHaveTextContent(
+      "gemini-3.5-transcribe-live",
+    );
+    expect(screen.getByLabelText("Sample rate")).toHaveValue(16000);
+    expect(screen.getByRole("switch", { name: "Word timestamps" })).toBeChecked();
+    chooseFromField("Language", "Hindi (hi-IN)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].asr).toEqual({
+      credential_mode: "byok",
+      vendor: "gemini",
+      language: "hi-IN",
+      params: {
+        api_key: "",
+        model: "gemini-3.5-transcribe-live",
+        sample_rate: 16000,
+        language: "hi-IN",
+        word_timestamp: true,
+      },
+    });
   });
 
   it("restores the previous LLM BYOK draft after a managed-mode round trip", async () => {
