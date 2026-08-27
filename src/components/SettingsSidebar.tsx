@@ -552,6 +552,18 @@ const getDefaultASRConfig = (vendor: ASRVendor): ASRConfig => {
           region: getEnvVar("MICROSOFT_ASR_REGION", "eastus"),
         },
       };
+    case "gemini":
+      return {
+        vendor: "gemini",
+        language,
+        params: {
+          api_key: "",
+          model: "gemini-3.5-transcribe-live",
+          sample_rate: 16000,
+          language,
+          word_timestamp: true,
+        },
+      };
     case "ares":
       return {
         vendor: "ares",
@@ -914,6 +926,10 @@ const Toggle: React.FC<{
       )}
     </div>
     <button
+      type="button"
+      role="switch"
+      aria-label={label}
+      aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
         checked ? "bg-agora-accent-blue" : "bg-gray-300 dark:bg-gray-600"
@@ -2396,6 +2412,15 @@ const AgentSettingsSidebarContent: React.FC<{
         model: "nova-3",
         language: "en",
       });
+    } else if (vendor === "gemini") {
+      const language = settings.asr?.language || "en-US";
+      Object.assign(defaultParams, {
+        api_key: "",
+        model: "gemini-3.5-transcribe-live",
+        sample_rate: 16000,
+        language,
+        word_timestamp: true,
+      });
     }
 
     updateASR({
@@ -3550,7 +3575,22 @@ const AgentSettingsSidebarContent: React.FC<{
           <FormField label="Language" required>
             <CustomSelect
               value={settings.asr?.language || "en-US"}
-              onChange={(v) => updateASR({ language: v })}
+              onChange={(language) =>
+                updateASR({
+                  language,
+                  ...(selectedASRVendor === "gemini"
+                    ? {
+                        params: {
+                          ...((settings.asr?.params ?? {}) as Record<
+                            string,
+                            unknown
+                          >),
+                          language,
+                        },
+                      }
+                    : {}),
+                })
+              }
               options={SUPPORTED_LANGUAGES.map((lang) => ({
                 value: lang.code,
                 label: `${lang.label} (${lang.code})`,
@@ -3622,6 +3662,68 @@ const AgentSettingsSidebarContent: React.FC<{
                   }))}
                 />
               </FormField>
+            </>
+          )}
+          {!asrManaged && selectedASRVendor === "gemini" && (
+            <>
+              <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
+                Gemini ASR uses Agora&apos;s early-access preview endpoint and
+                the gemini-live feature header.
+              </div>
+              <FormField
+                label="Gemini API Key"
+                required
+                hint="Leave empty to use the server-side GEMINI_API_KEY."
+              >
+                <Input
+                  aria-label="Gemini API Key"
+                  type="password"
+                  value={maskKeyForDisplay(getASRParam("api_key"))}
+                  onChange={(event) =>
+                    keyChange(
+                      event.target.value,
+                      getASRParam("api_key"),
+                      (key) => setASRParam("api_key", key),
+                    )
+                  }
+                  placeholder="Leave empty for server key, or enter a Gemini API key"
+                />
+              </FormField>
+              <FormField label="Model">
+                <CustomSelect
+                  value={
+                    getASRParam("model") || "gemini-3.5-transcribe-live"
+                  }
+                  onChange={(model) => setASRParam("model", model)}
+                  options={(ASR_PRESETS.gemini.models ?? []).map((model) => ({
+                    value: model,
+                    label: model,
+                  }))}
+                />
+              </FormField>
+              <FormField label="Sample rate">
+                <Input
+                  aria-label="Sample rate"
+                  type="number"
+                  min={8000}
+                  step={1000}
+                  value={Number(getASRParam("sample_rate") || 16000)}
+                  onChange={(event) =>
+                    setASRParam("sample_rate", Number(event.target.value))
+                  }
+                />
+              </FormField>
+              <Toggle
+                label="Word timestamps"
+                checked={
+                  (settings.asr?.params as Record<string, unknown> | undefined)
+                    ?.word_timestamp !== false
+                }
+                onChange={(enabled) =>
+                  setASRParam("word_timestamp", enabled)
+                }
+                hint="Include word-level timestamps in transcription events."
+              />
             </>
           )}
           {!asrManaged && (
