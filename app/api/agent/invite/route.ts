@@ -20,6 +20,8 @@ import {
   buildJoinProperties,
   validateAgentSettings,
 } from "@/lib/agora/joinPayload";
+import { hydrateAgentProviderCredentials } from "@/server/agentProviderCredentials";
+import { maskSensitive } from "@/server/maskSensitive";
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE!;
@@ -512,6 +514,7 @@ async function handleCustomPayloadJoin(
   });
   for (const key of Object.keys(properties)) delete properties[key];
   Object.assign(properties, canonicalCustomProperties, customPassthrough);
+  Object.assign(properties, hydrateAgentProviderCredentials(properties));
 
   const joinPayload = {
     name: customJoinPayload.name,
@@ -525,49 +528,7 @@ async function handleCustomPayloadJoin(
   );
   const { apiUrl, featureHeaders } = getJoinRequestConfig(properties);
 
-  const sanitized = JSON.parse(JSON.stringify(joinPayload)) as Record<
-    string,
-    unknown
-  >;
-  if (sanitized.properties && typeof sanitized.properties === "object") {
-    const p = sanitized.properties as Record<string, unknown>;
-    if (p.token) p.token = String(p.token).substring(0, 20) + "...";
-    if ((p.llm as Record<string, unknown>)?.api_key)
-      (p.llm as Record<string, unknown>).api_key = "***MASKED***";
-    if ((p.mllm as Record<string, unknown>)?.api_key)
-      (p.mllm as Record<string, unknown>).api_key = "***MASKED***";
-    if (
-      (p.tts as Record<string, unknown>)?.params &&
-      typeof (p.tts as Record<string, unknown>).params === "object"
-    ) {
-      (
-        (p.tts as Record<string, unknown>).params as Record<string, unknown>
-      ).key = "***MASKED***";
-    }
-    if (
-      (p.asr as Record<string, unknown>)?.params &&
-      typeof (p.asr as Record<string, unknown>).params === "object"
-    ) {
-      const asrParams = (p.asr as Record<string, unknown>).params as Record<
-        string,
-        unknown
-      >;
-      if (asrParams.api_key) asrParams.api_key = "***MASKED***";
-      if (asrParams.key) asrParams.key = "***MASKED***";
-    }
-    if (
-      (p.avatar as Record<string, unknown>)?.params &&
-      typeof (p.avatar as Record<string, unknown>).params === "object"
-    ) {
-      const ap = (p.avatar as Record<string, unknown>).params as Record<
-        string,
-        unknown
-      >;
-      ap.api_key = "***MASKED***";
-      if (ap.agora_token)
-        ap.agora_token = String(ap.agora_token).substring(0, 20) + "...";
-    }
-  }
+  const sanitized = maskSensitive(joinPayload);
   console.log(
     "[Agent invite] Custom payload join request:",
     JSON.stringify(sanitized, null, 2),
@@ -1456,6 +1417,11 @@ export async function POST(request: NextRequest) {
       };
     }
 
+    Object.assign(
+      propertiesPayload,
+      hydrateAgentProviderCredentials(propertiesPayload),
+    );
+
     let joinPayload = {
       name: normalizedAgentSettings.name,
       ...(normalizedAgentSettings.pipeline_id
@@ -1470,35 +1436,8 @@ export async function POST(request: NextRequest) {
     ).toString("base64");
     const { apiUrl, featureHeaders } = getJoinRequestConfig(propertiesPayload);
 
-    // Create a sanitized version for logging (mask sensitive data)
-    const sanitizedPayload = JSON.parse(JSON.stringify(joinPayload));
-    if (sanitizedPayload.properties?.token) {
-      sanitizedPayload.properties.token =
-        sanitizedPayload.properties.token.substring(0, 20) + "...";
-    }
-    if (sanitizedPayload.properties?.llm?.api_key) {
-      sanitizedPayload.properties.llm.api_key = "***MASKED***";
-    }
-    if (sanitizedPayload.properties?.mllm?.api_key) {
-      sanitizedPayload.properties.mllm.api_key = "***MASKED***";
-    }
-    if (sanitizedPayload.properties?.tts?.params?.key) {
-      sanitizedPayload.properties.tts.params.key = "***MASKED***";
-    }
-    if (sanitizedPayload.properties?.asr?.params?.api_key) {
-      sanitizedPayload.properties.asr.params.api_key = "***MASKED***";
-    }
-    if (sanitizedPayload.properties?.asr?.params?.key) {
-      sanitizedPayload.properties.asr.params.key = "***MASKED***";
-    }
-    if (sanitizedPayload.properties?.avatar?.params?.api_key) {
-      sanitizedPayload.properties.avatar.params.api_key = "***MASKED***";
-    }
-    if (sanitizedPayload.properties?.avatar?.params?.agora_token) {
-      sanitizedPayload.properties.avatar.params.agora_token =
-        sanitizedPayload.properties.avatar.params.agora_token.substring(0, 20) +
-        "...";
-    }
+    // Recursively sanitize every provider credential and RTC token before logging.
+    const sanitizedPayload = maskSensitive(joinPayload);
 
     console.log("\n========== AGORA CONVERSATIONAL AI REQUEST ==========");
     console.log("URL:", apiUrl);

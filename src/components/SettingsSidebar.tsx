@@ -13,8 +13,10 @@ import {
   MdBuild,
   MdCode,
   MdQueryStats,
+  MdPhone,
 } from "react-icons/md";
 import VoiceSettings from "./VoiceSettings";
+import TelephonySettings from "./TelephonySettings";
 import useAppStore from "@/store/useAppStore";
 import { showToast } from "@/services/uiService";
 import type {
@@ -63,7 +65,7 @@ import {
   type ManagedTTSVendor,
 } from "@/lib/agora/managedProviders";
 
-type SettingsTab = "ai-agent" | "voice" | "mcp-server";
+type SettingsTab = "ai-agent" | "voice" | "mcp-server" | "telephony";
 
 interface SettingsSidebarProps {
   isOpen: boolean;
@@ -224,7 +226,7 @@ const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 
         {/* Tabs (only when custom settings not applied and view not open) */}
         {showTabs && (
-          <div className="flex gap-2 px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+          <div className="flex gap-2 overflow-x-auto px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
             <TabButton
               active={activeTab === "ai-agent"}
               onClick={() => setActiveTab("ai-agent")}
@@ -242,6 +244,12 @@ const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               onClick={() => setActiveTab("mcp-server")}
               icon={<MdExtension size={18} />}
               label="MCP Server"
+            />
+            <TabButton
+              active={activeTab === "telephony"}
+              onClick={() => setActiveTab("telephony")}
+              icon={<MdPhone size={18} />}
+              label="Telephony"
             />
           </div>
         )}
@@ -297,7 +305,9 @@ const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               )}
               <div
                 className={
-                  useCustomPayload ? "pointer-events-none opacity-50" : ""
+                  useCustomPayload && activeTab !== "telephony"
+                    ? "pointer-events-none opacity-50"
+                    : ""
                 }
               >
                 {activeTab === "ai-agent" ? (
@@ -312,6 +322,8 @@ const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                     onSave={onSaveAgentSettings}
                     onClose={onClose}
                   />
+                ) : activeTab === "telephony" ? (
+                  <TelephonySettings />
                 ) : (
                   <div className="px-6 py-4">
                     <VoiceSettings

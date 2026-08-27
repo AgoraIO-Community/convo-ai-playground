@@ -116,6 +116,20 @@ describe("SettingsSidebar transcript transport", () => {
     expect(screen.getByText("Graceful farewell")).toBeInTheDocument();
   });
 
+  it("exposes outbound telephony as a top-level settings tab", () => {
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Telephony" }),
+    ).toBeInTheDocument();
+  });
+
   it("offers every current v2.11 ASR and TTS vendor", () => {
     expect(
       Object.keys(TTS_PRESETS).filter(
