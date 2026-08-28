@@ -5,12 +5,16 @@ import { useRouter } from "next/navigation";
 import { MdChat, MdTimer } from "react-icons/md";
 import AgentTile from "@/components/AgentTile";
 import BottomSheet from "@/components/common/BottomSheet";
+import CallExperienceModeSwitch from "@/components/CallExperienceModeSwitch";
 import Controls from "@/components/Controls";
 import TranscriptSidePanel from "@/components/TranscriptSidePanel";
 import VideoTile from "@/components/VideoTile";
+import VoiceAgentStage from "@/components/VoiceAgentStage";
 import { useAgora } from "@/hooks/useAgora";
 import { useConversationalAI } from "@/hooks/useConversationalAI";
+import { showToast } from "@/services/uiService";
 import useAppStore from "@/store/useAppStore";
+import type { CallExperienceMode } from "@/types/callExperience";
 
 const SESSION_DURATION_MS = 15 * 60 * 1000;
 
@@ -37,12 +41,19 @@ const VideoCallScreen: React.FC = () => {
   const sessionStartTime = useAppStore((state) => state.sessionStartTime);
   const [remainingMs, setRemainingMs] = useState(SESSION_DURATION_MS);
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
+  const initialVideoMutedRef = useRef(videoMuted);
+  const [callExperienceMode, setCallExperienceMode] =
+    useState<CallExperienceMode>(
+      initialVideoMutedRef.current ? "voice" : "video",
+    );
+  const [isModeChanging, setIsModeChanging] = useState(false);
   const isEndingRef = useRef(false);
 
   const {
     leaveCall,
     localTracks,
     avatarVideoTrack,
+    setLocalVideoEnabled,
     rtcClient,
     rtmClient,
   } = useAgora();
@@ -73,6 +84,26 @@ const VideoCallScreen: React.FC = () => {
   const handleEndCall = useCallback(
     async (): Promise<void> => endCall("ended"),
     [endCall],
+  );
+
+  const handleExperienceModeChange = useCallback(
+    async (nextMode: CallExperienceMode): Promise<void> => {
+      if (nextMode === callExperienceMode || isModeChanging) return;
+      setIsModeChanging(true);
+      try {
+        await setLocalVideoEnabled(nextMode === "video");
+        setCallExperienceMode(nextMode);
+      } catch {
+        showToast(
+          nextMode === "video"
+            ? "Unable to start the camera. Check browser permission and device availability."
+            : "Unable to switch to voice mode.",
+          "error",
+        );
+      } finally {
+        setIsModeChanging(false);
+      }
+    }, [callExperienceMode, isModeChanging, setLocalVideoEnabled],
   );
 
   useEffect(() => {
@@ -117,6 +148,12 @@ const VideoCallScreen: React.FC = () => {
           </p>
         </div>
 
+        <CallExperienceModeSwitch
+          value={callExperienceMode}
+          onChange={(mode) => void handleExperienceModeChange(mode)}
+          disabled={isModeChanging}
+        />
+
         {isAgentActive && (
           <span className="hidden rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-300 sm:inline-flex">
             {transcriptionMode.toUpperCase()} live
@@ -146,42 +183,63 @@ const VideoCallScreen: React.FC = () => {
         </aside>
 
         <main className="flex min-w-0 flex-1 items-center justify-center overflow-y-auto p-3 sm:p-5">
-          <div
-            className={`grid w-full max-w-6xl gap-3 sm:gap-5 ${
-              isAgentActive ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"
-            }`}
-          >
-            <div className="mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl">
-              <VideoTile
-                uid={localUID ?? "local"}
-                name={localUsername || "You"}
-                isLocal
-                track={localTracks.videoTrack}
-                micMuted={audioMuted}
-                videoMuted={videoMuted}
+          {callExperienceMode === "voice" ? (
+            <div className="h-full max-h-[44rem] min-h-[22rem] w-full max-w-4xl">
+              <VoiceAgentStage
+                agentName={agentSettings?.name || "AI Agent"}
+                agentState={agentState}
+                isAgentActive={isAgentActive}
+                transcriptionMode={transcriptionMode}
+                avatarWaiting={Boolean(agentSettings?.avatar?.enable)}
               />
             </div>
-
-            {isAgentActive && agentRtcUid && (
-              <div className="mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border border-cyan-300/20 shadow-2xl">
-                <AgentTile
-                  agentUid={agentAvatarRtcUid || agentRtcUid}
-                  agentState={agentState}
-                  agentName={agentSettings?.name || "AI Agent"}
-                  transcriptionMode={transcriptionMode}
-                  videoTrack={avatarVideoTrack}
-                  avatarWaiting={
-                    Boolean(agentSettings?.avatar?.enable) && !avatarVideoTrack
-                  }
+          ) : (
+            <div
+              className={`grid w-full max-w-6xl gap-3 sm:gap-5 ${
+                isAgentActive ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"
+              }`}
+            >
+              <div className="mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl">
+                <VideoTile
+                  uid={localUID ?? "local"}
+                  name={localUsername || "You"}
+                  isLocal
+                  track={localTracks.videoTrack}
+                  micMuted={audioMuted}
+                  videoMuted={videoMuted}
                 />
               </div>
-            )}
-          </div>
+
+              {isAgentActive && agentRtcUid && (
+                <div className="mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border border-cyan-300/20 shadow-2xl">
+                  {avatarVideoTrack ? (
+                    <AgentTile
+                      agentUid={agentAvatarRtcUid || agentRtcUid}
+                      agentState={agentState}
+                      agentName={agentSettings?.name || "AI Agent"}
+                      transcriptionMode={transcriptionMode}
+                      videoTrack={avatarVideoTrack}
+                    />
+                  ) : (
+                    <VoiceAgentStage
+                      compact
+                      agentName={agentSettings?.name || "AI Agent"}
+                      agentState={agentState}
+                      isAgentActive
+                      transcriptionMode={transcriptionMode}
+                      avatarWaiting={Boolean(agentSettings?.avatar?.enable)}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
 
       <Controls
         onEndCall={handleEndCall}
+        experienceMode={callExperienceMode}
         manualTurnControls={
           isAgentActive &&
           transcriptionMode === "rtm" &&

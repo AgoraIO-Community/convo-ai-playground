@@ -6,6 +6,10 @@ import type {
   TTSConfig,
   TTSVendor,
 } from "@/types/agora";
+import {
+  OPENAI_MANAGED_DEFAULT_MODEL,
+  OPENAI_MANAGED_MODEL_IDS,
+} from "./openAIModels";
 
 interface ManagedProviderDefinition {
   label: string;
@@ -66,8 +70,8 @@ export const MANAGED_ASR_PROVIDERS = {
 export const MANAGED_LLM_PROVIDERS = {
   openai: {
     label: "OpenAI",
-    defaultModel: "gpt-5-mini",
-    models: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-5-nano", "gpt-5-mini"],
+    defaultModel: OPENAI_MANAGED_DEFAULT_MODEL,
+    models: OPENAI_MANAGED_MODEL_IDS,
   },
 } as const satisfies Record<string, ManagedProviderDefinition>;
 

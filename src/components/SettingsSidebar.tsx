@@ -3,8 +3,8 @@
 import React, { useState } from "react";
 import {
   MdClose,
-  MdSmartToy,
-  MdMic,
+  MdOutlineMic,
+  MdOutlineExtension,
   MdExtension,
   MdAdd,
   MdEdit,
@@ -13,8 +13,9 @@ import {
   MdBuild,
   MdCode,
   MdQueryStats,
-  MdPhone,
+  MdOutlinePhoneInTalk,
 } from "react-icons/md";
+import AgentGlyph from "@/components/AgentGlyph";
 import VoiceSettings from "./VoiceSettings";
 import TelephonySettings from "./TelephonySettings";
 import useAppStore from "@/store/useAppStore";
@@ -64,6 +65,11 @@ import {
   normalizeManagedTTS,
   type ManagedTTSVendor,
 } from "@/lib/agora/managedProviders";
+import {
+  OPENAI_CUSTOM_MODEL_VALUE,
+  getOpenAIModelControlValue,
+  resolveOpenAIModelValue,
+} from "@/lib/agora/openAIModels";
 
 type SettingsTab = "ai-agent" | "voice" | "mcp-server" | "telephony";
 
@@ -85,11 +91,14 @@ const TabButton: React.FC<{
   label: string;
 }> = ({ active, onClick, icon, label }) => (
   <button
+    type="button"
+    role="tab"
+    aria-selected={active}
     onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+    className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-agora-accent-blue ${
       active
-        ? "bg-agora-accent-blue text-white"
-        : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+        ? "bg-agora-accent-blue/15 text-agora-accent-blue ring-1 ring-inset ring-agora-accent-blue/25"
+        : "text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
     }`}
   >
     {icon}
@@ -226,29 +235,34 @@ const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 
         {/* Tabs (only when custom settings not applied and view not open) */}
         {showTabs && (
-          <div className="flex gap-2 overflow-x-auto px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+          <div
+            role="tablist"
+            aria-label="Settings sections"
+            data-testid="settings-tab-list"
+            className="flex gap-2 overflow-x-auto px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50"
+          >
             <TabButton
               active={activeTab === "ai-agent"}
               onClick={() => setActiveTab("ai-agent")}
-              icon={<MdSmartToy size={18} />}
+              icon={<AgentGlyph size="navigation" />}
               label="AI Agent"
             />
             <TabButton
               active={activeTab === "voice"}
               onClick={() => setActiveTab("voice")}
-              icon={<MdMic size={18} />}
+              icon={<MdOutlineMic size={18} />}
               label="Voice"
             />
             <TabButton
               active={activeTab === "mcp-server"}
               onClick={() => setActiveTab("mcp-server")}
-              icon={<MdExtension size={18} />}
+              icon={<MdOutlineExtension size={18} />}
               label="MCP Server"
             />
             <TabButton
               active={activeTab === "telephony"}
               onClick={() => setActiveTab("telephony")}
-              icon={<MdPhone size={18} />}
+              icon={<MdOutlinePhoneInTalk size={18} />}
               label="Telephony"
             />
           </div>
@@ -891,9 +905,14 @@ const Section: React.FC<{
   onToggle: () => void;
   children: React.ReactNode;
   badge?: string;
-}> = ({ title, icon, isOpen, onToggle, children, badge }) => (
-  <div className="border border-gray-300 dark:border-gray-700 rounded-lg mb-3 overflow-hidden">
+  displayOrder: number;
+}> = ({ title, icon, isOpen, onToggle, children, badge, displayOrder }) => (
+  <div
+    className="border border-gray-300 dark:border-gray-700 rounded-lg mb-3 overflow-hidden"
+    style={{ order: displayOrder }}
+  >
     <button
+      type="button"
       onClick={onToggle}
       className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-800/50 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
     >
@@ -1991,22 +2010,6 @@ const CustomSettingsTabContent: React.FC<CustomSettingsTabContentProps> = ({
   );
 };
 
-// Bot icon
-const BotIcon: React.FC<{ className?: string; size?: number }> = ({
-  className = "",
-  size = 24,
-}) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    width={size}
-    height={size}
-    className={className}
-  >
-    <path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7h1a1 1 0 011 1v3a1 1 0 01-1 1h-1v1a2 2 0 01-2 2H5a2 2 0 01-2-2v-1H2a1 1 0 01-1-1v-3a1 1 0 011-1h1a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2zm-3 9a1 1 0 00-1 1v2a1 1 0 002 0v-2a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v2a1 1 0 002 0v-2a1 1 0 00-1-1z" />
-  </svg>
-);
-
 // Agent settings content component (embedded version)
 const AgentSettingsSidebarContent: React.FC<{
   onSave: (settings: AgentSettingsType) => void | Promise<void>;
@@ -2112,6 +2115,8 @@ const AgentSettingsSidebarContent: React.FC<{
   const [selectedLLMVendor, setSelectedLLMVendor] = React.useState<LLMVendor>(
     (getEnvVar("LLM_VENDOR", "openai") as LLMVendor) || "openai",
   );
+  const [customOpenAIModelError, setCustomOpenAIModelError] =
+    React.useState<string | null>(null);
   const [selectedTTSVendor, setSelectedTTSVendor] = React.useState<TTSVendor>(
     getDefaultTTSVendor(),
   );
@@ -2120,6 +2125,13 @@ const AgentSettingsSidebarContent: React.FC<{
   );
   const [selectedAvatarVendor, setSelectedAvatarVendor] =
     React.useState<AvatarVendor>("anam");
+  const isOpenAIByok =
+    settings.llm.credential_mode !== "managed" &&
+    selectedLLMVendor === "openai";
+  const persistedLLMModel = settings.llm.params?.model ?? "";
+  const llmModelControlValue = isOpenAIByok
+    ? getOpenAIModelControlValue(persistedLLMModel)
+    : persistedLLMModel;
   const llmByokDraft = React.useRef<{
     config: LLMConfig;
     selectedVendor: LLMVendor;
@@ -2443,6 +2455,20 @@ const AgentSettingsSidebarContent: React.FC<{
 
   // Apply: persist current settings to IndexedDB (without closing)
   const handleApply = React.useCallback(async () => {
+    if (
+      isOpenAIByok &&
+      llmModelControlValue === OPENAI_CUSTOM_MODEL_VALUE
+    ) {
+      const customModel = resolveOpenAIModelValue(
+        llmModelControlValue,
+        persistedLLMModel,
+      );
+      if (!customModel.ok) {
+        setCustomOpenAIModelError(customModel.error);
+        showToast(customModel.error, "error");
+        return;
+      }
+    }
     const validation = validateAgentSettings(settings);
     if (!validation.valid) {
       showToast(validation.errors[0]?.message ?? "Invalid agent settings", "error");
@@ -2463,7 +2489,13 @@ const AgentSettingsSidebarContent: React.FC<{
       }
     }
     await onSave(settings);
-  }, [onSave, settings]);
+  }, [
+    isOpenAIByok,
+    llmModelControlValue,
+    onSave,
+    persistedLLMModel,
+    settings,
+  ]);
 
   // Reset: reload settings from IndexedDB
   const handleReset = React.useCallback(async () => {
@@ -2611,6 +2643,12 @@ const AgentSettingsSidebarContent: React.FC<{
   const llmModels = llmManaged
     ? MANAGED_LLM_PROVIDERS.openai.models
     : LLM_PRESETS[selectedLLMVendor].models;
+  const llmModelOptions = [
+    ...(llmModels ?? []).map((model) => ({ value: model, label: model })),
+    ...(isOpenAIByok
+      ? [{ value: OPENAI_CUSTOM_MODEL_VALUE, label: "Custom model ID" }]
+      : []),
+  ];
   const managedTTSDefinition =
     MANAGED_TTS_PROVIDERS[selectedTTSVendor as ManagedTTSVendor] ??
     MANAGED_TTS_PROVIDERS.minimax;
@@ -2636,7 +2674,7 @@ const AgentSettingsSidebarContent: React.FC<{
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto px-6 py-4 bg-gray-50 dark:bg-gray-900/50">
+      <div className="flex-1 overflow-y-auto px-6 py-4 bg-gray-50 dark:bg-gray-900/50 grid grid-cols-1">
         {/* Info banner - which changes apply live vs require restart */}
         {isAgentActive && (
           <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
@@ -2686,7 +2724,8 @@ const AgentSettingsSidebarContent: React.FC<{
         {/* LLM Section */}
         <Section
           title="LLM Configuration"
-          icon={<BotIcon size={20} />}
+          displayOrder={2}
+          icon={<AgentGlyph size="control" />}
           isOpen={expandedSections.llm}
           onToggle={() => toggleSection("llm")}
           badge="Required"
@@ -2753,18 +2792,53 @@ const AgentSettingsSidebarContent: React.FC<{
             tooltip="Model name for the selected LLM vendor."
           >
             {llmModels ? (
-              <CustomSelect
-                value={settings.llm.params?.model || ""}
-                onChange={(v) =>
-                  updateLLM({
-                    params: { ...settings.llm.params, model: v },
-                  })
-                }
-                options={llmModels.map((model) => ({
-                  value: model,
-                  label: model,
-                }))}
-              />
+              <>
+                <CustomSelect
+                  value={llmModelControlValue}
+                  onChange={(value) => {
+                    setCustomOpenAIModelError(null);
+                    updateLLM({
+                      params: {
+                        ...settings.llm.params,
+                        model:
+                          value === OPENAI_CUSTOM_MODEL_VALUE
+                            ? getOpenAIModelControlValue(persistedLLMModel) ===
+                              OPENAI_CUSTOM_MODEL_VALUE
+                              ? persistedLLMModel
+                              : ""
+                            : value,
+                      },
+                    });
+                  }}
+                  options={llmModelOptions}
+                  error={Boolean(customOpenAIModelError)}
+                />
+                {isOpenAIByok &&
+                  llmModelControlValue === OPENAI_CUSTOM_MODEL_VALUE && (
+                    <div className="mt-2">
+                      <Input
+                        aria-label="Custom OpenAI model ID"
+                        value={persistedLLMModel}
+                        error={Boolean(customOpenAIModelError)}
+                        onChange={(event) => {
+                          setCustomOpenAIModelError(null);
+                          updateLLM({
+                            params: {
+                              ...settings.llm.params,
+                              model: event.target.value,
+                            },
+                          });
+                        }}
+                        placeholder="Enter an OpenAI model ID"
+                      />
+                      {customOpenAIModelError && (
+                        <p className="mt-1 text-xs text-red-500" role="alert">
+                          {customOpenAIModelError}
+                        </p>
+                      )}
+                    </div>
+                  )}
+              </>
             ) : (
               <Input
                 value={settings.llm.params?.model || ""}
@@ -3033,6 +3107,7 @@ const AgentSettingsSidebarContent: React.FC<{
 
         <Section
           title="MLLM (Realtime voice)"
+          displayOrder={4}
           icon={<MdGraphicEq size={20} />}
           isOpen={expandedSections.mllm}
           onToggle={() => toggleSection("mllm")}
@@ -3245,6 +3320,7 @@ const AgentSettingsSidebarContent: React.FC<{
         {/* TTS Section */}
         <Section
           title="TTS (Text-to-Speech)"
+          displayOrder={3}
           icon={<MdRecordVoiceOver size={20} />}
           isOpen={expandedSections.tts}
           onToggle={() => toggleSection("tts")}
@@ -3554,6 +3630,7 @@ const AgentSettingsSidebarContent: React.FC<{
         {/* ASR Section */}
         <Section
           title="ASR (Speech Recognition)"
+          displayOrder={1}
           icon={<MdGraphicEq size={20} />}
           isOpen={expandedSections.asr}
           onToggle={() => toggleSection("asr")}
@@ -3767,6 +3844,7 @@ const AgentSettingsSidebarContent: React.FC<{
         {/* AI Avatar Section */}
         <Section
           title="AI Avatar (Optional)"
+          displayOrder={5}
           icon={<MdFace size={20} />}
           isOpen={expandedSections.avatar}
           onToggle={() => toggleSection("avatar")}
@@ -4106,6 +4184,7 @@ const AgentSettingsSidebarContent: React.FC<{
 
         <Section
           title="Conversation turns"
+          displayOrder={6}
           icon={<MdQueryStats size={20} />}
           isOpen={expandedSections.debug}
           onToggle={() => toggleSection("debug")}
@@ -4275,6 +4354,7 @@ const AgentSettingsSidebarContent: React.FC<{
         {/* Advanced Section */}
         <Section
           title="Advanced Settings"
+          displayOrder={7}
           icon={<MdTune size={20} />}
           isOpen={expandedSections.advanced}
           onToggle={() => toggleSection("advanced")}

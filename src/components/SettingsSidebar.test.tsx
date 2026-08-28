@@ -116,6 +116,30 @@ describe("SettingsSidebar transcript transport", () => {
     expect(screen.getByText("Graceful farewell")).toBeInTheDocument();
   });
 
+  it("presents speech pipeline sections in input-to-output order", () => {
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={() => undefined}
+      />,
+    );
+
+    const sections = [
+      screen.getByRole("button", { name: /ASR \(Speech Recognition\)/i }),
+      screen.getByRole("button", { name: /LLM Configuration/i }),
+      screen.getByRole("button", { name: /TTS \(Text-to-Speech\)/i }),
+      screen.getByRole("button", { name: /MLLM \(Realtime voice\)/i }),
+      screen.getByRole("button", { name: /AI Avatar \(Optional\)/i }),
+      screen.getByRole("button", { name: /Conversation turns/i }),
+      screen.getByRole("button", { name: /Advanced Settings/i }),
+    ];
+
+    sections.forEach((section, index) => {
+      expect(section.parentElement).toHaveStyle({ order: index + 1 });
+    });
+  });
+
   it("exposes outbound telephony as a top-level settings tab", () => {
     render(
       <SettingsSidebar
@@ -126,8 +150,32 @@ describe("SettingsSidebar transcript transport", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Telephony" }),
+      screen.getByRole("tab", { name: "Telephony" }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps settings navigation accessible and non-wrapping", () => {
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={() => undefined}
+      />,
+    );
+
+    const aiTab = screen.getByRole("tab", { name: "AI Agent" });
+    expect(aiTab).toHaveAttribute("aria-selected", "true");
+    expect(aiTab).toHaveClass("whitespace-nowrap");
+    expect(screen.getByTestId("settings-tab-list")).toHaveClass(
+      "overflow-x-auto",
+    );
+    expect(within(aiTab).getByTestId("agent-glyph")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Voice" }));
+    expect(screen.getByRole("tab", { name: "Voice" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("offers every current v2.11 ASR and TTS vendor", () => {
@@ -219,6 +267,55 @@ describe("SettingsSidebar transcript transport", () => {
     expect(screen.queryByText("API URL", { selector: "label span" })).not.toBeInTheDocument();
     expect(screen.queryByText("API Key", { selector: "label span" })).not.toBeInTheDocument();
     expect(screen.queryByText("Request headers (JSON)", { selector: "label span" })).not.toBeInTheDocument();
+  });
+
+  it("saves an exact custom OpenAI BYOK model ID", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /LLM Configuration/i }));
+    chooseFromField("Model", "Custom model ID");
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(screen.getByText("Enter a custom OpenAI model ID.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Custom OpenAI model ID"), {
+      target: { value: "gpt-5.7-preview" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].llm.params?.model).toBe("gpt-5.7-preview");
+  });
+
+  it("reopens an unknown stored OpenAI model as a custom ID", () => {
+    useAppStore.getState().setAgentSettings({
+      ...getDefaultSettings(),
+      llm: {
+        ...getDefaultSettings().llm,
+        credential_mode: "byok",
+        vendor: "openai",
+        params: { model: "gpt-account-snapshot" },
+      },
+    });
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /LLM Configuration/i }));
+    expect(getSelectButton("Model")).toHaveTextContent("Custom model ID");
+    expect(screen.getByLabelText("Custom OpenAI model ID")).toHaveValue(
+      "gpt-account-snapshot",
+    );
   });
 
   it("shows only MiniMax and OpenAI models in managed TTS", () => {

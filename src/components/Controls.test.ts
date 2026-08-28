@@ -94,8 +94,23 @@ describe("Controls", () => {
     state.agentSettings = { advanced_features: { enable_rtm: true } };
   });
 
-  it("renders exactly the five requested call controls", () => {
-    render(React.createElement(Controls, { onEndCall: mocks.onEndCall }));
+  it("renders the camera control only in video mode", () => {
+    const { rerender } = render(
+      React.createElement(Controls, {
+        onEndCall: mocks.onEndCall,
+        experienceMode: "voice",
+      }),
+    );
+
+    expect(screen.getAllByRole("button")).toHaveLength(4);
+    expect(screen.queryByRole("button", { name: "Turn camera off" })).not.toBeInTheDocument();
+
+    rerender(
+      React.createElement(Controls, {
+        onEndCall: mocks.onEndCall,
+        experienceMode: "video",
+      }),
+    );
 
     expect(screen.getAllByRole("button")).toHaveLength(5);
     expect(screen.getByRole("button", { name: "Mute microphone" })).toBeInTheDocument();
@@ -106,7 +121,12 @@ describe("Controls", () => {
   });
 
   it("starts the agent and opens settings without a host role", async () => {
-    render(React.createElement(Controls, { onEndCall: mocks.onEndCall }));
+    render(
+      React.createElement(Controls, {
+        onEndCall: mocks.onEndCall,
+        experienceMode: "video",
+      }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Start agent" }));
     await waitFor(() => expect(mocks.setAgentActive).toHaveBeenCalledOnce());
@@ -117,7 +137,12 @@ describe("Controls", () => {
   });
 
   it("opens agent settings as a side panel instead of a bottom sheet", () => {
-    render(React.createElement(Controls, { onEndCall: mocks.onEndCall }));
+    render(
+      React.createElement(Controls, {
+        onEndCall: mocks.onEndCall,
+        experienceMode: "video",
+      }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Agent settings" }));
 
@@ -129,7 +154,12 @@ describe("Controls", () => {
 
   it("uses RTC data-stream delivery when RTM is disabled", async () => {
     state.agentSettings = { advanced_features: { enable_rtm: false } };
-    render(React.createElement(Controls, { onEndCall: mocks.onEndCall }));
+    render(
+      React.createElement(Controls, {
+        onEndCall: mocks.onEndCall,
+        experienceMode: "video",
+      }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Start agent" }));
 
@@ -158,7 +188,12 @@ describe("Controls", () => {
         },
       }),
     });
-    render(React.createElement(Controls, { onEndCall: mocks.onEndCall }));
+    render(
+      React.createElement(Controls, {
+        onEndCall: mocks.onEndCall,
+        experienceMode: "video",
+      }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Start agent" }));
 
@@ -181,7 +216,12 @@ describe("Controls", () => {
   });
 
   it("delegates end-call cleanup before the screen navigates", () => {
-    render(React.createElement(Controls, { onEndCall: mocks.onEndCall }));
+    render(
+      React.createElement(Controls, {
+        onEndCall: mocks.onEndCall,
+        experienceMode: "video",
+      }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "End call" }));
 

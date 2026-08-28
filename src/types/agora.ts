@@ -1,5 +1,10 @@
 // src/types/agora.ts
 
+import {
+  OPENAI_BYOK_DEFAULT_MODEL,
+  OPENAI_BYOK_MODEL_IDS,
+} from "@/lib/agora/openAIModels";
+
 // ============================================
 // CONVERSATIONAL AI AGENT SETTINGS
 // Based on: https://docs.agora.io/en/conversational-ai/rest-api/agent/join
@@ -748,8 +753,8 @@ export const LLM_PRESETS: Record<LLMVendor, VendorPreset> = {
     label: "OpenAI",
     value: "openai",
     url: "https://api.openai.com/v1/chat/completions",
-    defaultModel: "gpt-4o-mini",
-    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+    defaultModel: OPENAI_BYOK_DEFAULT_MODEL,
+    models: [...OPENAI_BYOK_MODEL_IDS],
     requiresApiKey: true,
     style: "openai",
   },

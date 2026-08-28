@@ -7,13 +7,13 @@ import {
   MdMicOff,
   MdPlayArrow,
   MdSettings,
-  MdSmartToy,
   MdSync,
   MdStop,
   MdVideocam,
   MdVideocamOff,
 } from "react-icons/md";
 import { inviteAgent, stopAgent, updateAgent } from "@/api/agentApi";
+import AgentGlyph from "@/components/AgentGlyph";
 import SettingsSidebar from "@/components/SettingsSidebar";
 import { useAgora } from "@/hooks/useAgora";
 import {
@@ -28,10 +28,12 @@ import {
 } from "@/services/settingsDb";
 import useAppStore from "@/store/useAppStore";
 import type { AgentSettings } from "@/types/agora";
+import type { CallExperienceMode } from "@/types/callExperience";
 import { sanitizeCustomJoinPayload } from "@/utils/customPayloadSanitize";
 
 interface ControlsProps {
   onEndCall: () => Promise<void>;
+  experienceMode: CallExperienceMode;
   manualTurnControls?: {
     onStart?: () => Promise<string>;
     onEnd?: () => Promise<string>;
@@ -73,6 +75,7 @@ function hasRestartRequiredChanges(
 
 const Controls: React.FC<ControlsProps> = ({
   onEndCall,
+  experienceMode,
   manualTurnControls,
 }) => {
   const audioMuted = useAppStore((state) => state.audioMuted);
@@ -353,15 +356,17 @@ const Controls: React.FC<ControlsProps> = ({
               </button>}
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => void handleVideoToggle()}
-            className={circleButton}
-            aria-label={videoMuted ? "Turn camera on" : "Turn camera off"}
-            title={videoMuted ? "Turn camera on" : "Turn camera off"}
-          >
-            {videoMuted ? <MdVideocamOff /> : <MdVideocam />}
-          </button>
+          {experienceMode === "video" && (
+            <button
+              type="button"
+              onClick={() => void handleVideoToggle()}
+              className={circleButton}
+              aria-label={videoMuted ? "Turn camera on" : "Turn camera off"}
+              title={videoMuted ? "Turn camera on" : "Turn camera off"}
+            >
+              {videoMuted ? <MdVideocamOff /> : <MdVideocam />}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void handleEndCall()}
@@ -383,7 +388,7 @@ const Controls: React.FC<ControlsProps> = ({
             {isAgentLoading || isAgentUpdating ? (
               <MdSync className="animate-spin" />
             ) : (
-              <MdSmartToy />
+              <AgentGlyph size="control" />
             )}
             <span className="hidden text-sm font-semibold sm:inline">
               {isAgentLoading

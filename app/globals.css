@@ -136,6 +136,68 @@ body {
   animation: agent-state-soft 2s ease-in-out infinite;
 }
 
+/* Voice-agent stage: restrained signal motion driven by the live agent state. */
+@keyframes voice-agent-breathe {
+  0%, 100% { opacity: 0.54; transform: scale(0.98); }
+  50% { opacity: 0.92; transform: scale(1.025); }
+}
+@keyframes voice-agent-ripple-in {
+  0% { opacity: 0; transform: scale(1.16); }
+  55% { opacity: 0.72; }
+  100% { opacity: 0; transform: scale(0.82); }
+}
+@keyframes voice-agent-ripple-out {
+  0% { opacity: 0.7; transform: scale(0.76); }
+  100% { opacity: 0; transform: scale(1.22); }
+}
+@keyframes voice-agent-orbit {
+  to { transform: rotate(360deg); }
+}
+
+.voice-agent-orb {
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.14), transparent 66%);
+}
+.voice-agent-ring {
+  border: 1px solid rgba(103, 232, 249, 0.28);
+  box-shadow: 0 0 34px rgba(14, 165, 233, 0.13);
+}
+.voice-agent-orbit {
+  border: 1px solid transparent;
+  border-top-color: rgba(125, 211, 252, 0.7);
+  border-right-color: rgba(99, 102, 241, 0.28);
+}
+.voice-agent-orb[data-agent-visual-state="ready"] .voice-agent-ring,
+.voice-agent-orb[data-agent-visual-state="connected"] .voice-agent-ring,
+.voice-agent-orb[data-agent-visual-state="idle"] .voice-agent-ring,
+.voice-agent-orb[data-agent-visual-state="silent"] .voice-agent-ring {
+  animation: voice-agent-breathe 3.8s ease-in-out infinite;
+}
+.voice-agent-orb[data-agent-visual-state="listening"] .voice-agent-ring {
+  animation: voice-agent-ripple-in 1.8s ease-in-out infinite;
+}
+.voice-agent-orb[data-agent-visual-state="listening"] .voice-agent-ring-inner {
+  animation-delay: 0.45s;
+}
+.voice-agent-orb[data-agent-visual-state="thinking"] .voice-agent-orbit {
+  animation: voice-agent-orbit 4.6s linear infinite;
+}
+.voice-agent-orb[data-agent-visual-state="speaking"] .voice-agent-ring {
+  animation: voice-agent-ripple-out 1.35s ease-out infinite;
+}
+.voice-agent-orb[data-agent-visual-state="speaking"] .voice-agent-ring-inner {
+  animation-delay: 0.32s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-agent-motion,
+  .voice-agent-motion::before,
+  .voice-agent-motion::after,
+  .voice-agent-motion * {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Agent tile: shadow + vintage, less bright */
 .agent-tile-vintage {
   box-shadow:

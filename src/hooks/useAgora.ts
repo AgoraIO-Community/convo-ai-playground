@@ -321,20 +321,41 @@ export const useAgora = () => {
     state.toggleAudioMute();
   }, []);
 
+  const setLocalVideoEnabled = useCallback(
+    async (enabled: boolean): Promise<void> => {
+      const state = useAppStore.getState();
+      const currentlyEnabled = !state.videoMuted && Boolean(localVideoTrack);
+      if (currentlyEnabled === enabled) return;
+
+      if (enabled) {
+        const nextTrack = await AgoraRTC.createCameraVideoTrack();
+        try {
+          await getRtcClient().publish(nextTrack);
+        } catch (error) {
+          releaseAgoraTrack(nextTrack);
+          throw error;
+        }
+        localVideoTrack = nextTrack;
+        state.setLocalTracks(localAudioTrack, nextTrack);
+        if (useAppStore.getState().videoMuted) state.toggleVideoMute();
+        return;
+      }
+
+      if (localVideoTrack) {
+        await getRtcClient().unpublish(localVideoTrack);
+        releaseAgoraTrack(localVideoTrack);
+        localVideoTrack = null;
+        state.setLocalTracks(localAudioTrack, null);
+      }
+      if (!useAppStore.getState().videoMuted) state.toggleVideoMute();
+    },
+    [],
+  );
+
   const toggleLocalVideo = useCallback(async (): Promise<void> => {
     const state = useAppStore.getState();
-    if (state.videoMuted) {
-      localVideoTrack = await AgoraRTC.createCameraVideoTrack();
-      await getRtcClient().publish(localVideoTrack);
-      state.setLocalTracks(localAudioTrack, localVideoTrack);
-    } else if (localVideoTrack) {
-      await getRtcClient().unpublish(localVideoTrack);
-      releaseAgoraTrack(localVideoTrack);
-      localVideoTrack = null;
-      state.setLocalTracks(localAudioTrack, null);
-    }
-    state.toggleVideoMute();
-  }, []);
+    await setLocalVideoEnabled(state.videoMuted);
+  }, [setLocalVideoEnabled]);
 
   return {
     joinMeeting,
@@ -342,6 +363,7 @@ export const useAgora = () => {
     leaveCall,
     toggleLocalAudio,
     toggleLocalVideo,
+    setLocalVideoEnabled,
     localTracks: {
       audioTrack: localAudioTrackState,
       videoTrack: localVideoTrackState,

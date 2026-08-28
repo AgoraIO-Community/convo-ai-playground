@@ -212,4 +212,51 @@ describe("useAgora direct session", () => {
     expect(mocks.rtmClient.unsubscribe).toHaveBeenCalledWith("channel-private");
     expect(mocks.rtmClient.logout).toHaveBeenCalled();
   });
+
+  it("sets local video publication explicitly and idempotently", async () => {
+    const { useAgora } = await import("./useAgora");
+    const { default: useAppStore } = await import("@/store/useAppStore");
+    const { result } = renderHook(() => useAgora());
+
+    await act(async () => result.current.joinMeeting(session, false));
+    await act(async () => result.current.setLocalVideoEnabled(false));
+
+    expect(mocks.rtcClient.unpublish).toHaveBeenCalledWith(mocks.videoTrack);
+    expect(useAppStore.getState().videoMuted).toBe(true);
+
+    mocks.rtcClient.unpublish.mockClear();
+    await act(async () => result.current.setLocalVideoEnabled(false));
+    expect(mocks.rtcClient.unpublish).not.toHaveBeenCalled();
+
+    await act(async () => result.current.setLocalVideoEnabled(true));
+    expect(mocks.createCameraVideoTrack).toHaveBeenCalledTimes(2);
+    expect(mocks.rtcClient.publish).toHaveBeenLastCalledWith(mocks.videoTrack);
+    expect(useAppStore.getState().videoMuted).toBe(false);
+  });
+
+  it("does not recreate an already-published camera", async () => {
+    const { useAgora } = await import("./useAgora");
+    const { result } = renderHook(() => useAgora());
+
+    await act(async () => result.current.joinMeeting(session, false));
+    await act(async () => result.current.setLocalVideoEnabled(true));
+
+    expect(mocks.createCameraVideoTrack).toHaveBeenCalledOnce();
+    expect(mocks.rtcClient.publish).toHaveBeenCalledOnce();
+  });
+
+  it("keeps camera state unchanged when unpublish fails", async () => {
+    mocks.rtcClient.unpublish.mockRejectedValueOnce(new Error("unpublish failed"));
+    const { useAgora } = await import("./useAgora");
+    const { default: useAppStore } = await import("@/store/useAppStore");
+    const { result } = renderHook(() => useAgora());
+
+    await act(async () => result.current.joinMeeting(session, false));
+
+    await expect(
+      act(async () => result.current.setLocalVideoEnabled(false)),
+    ).rejects.toThrow("unpublish failed");
+    expect(useAppStore.getState().videoMuted).toBe(false);
+    expect(result.current.localTracks.videoTrack).toBe(mocks.videoTrack);
+  });
 });

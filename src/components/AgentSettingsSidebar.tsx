@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import AgentGlyph from "@/components/AgentGlyph";
 import {
   MdClose,
   MdExpandMore,
@@ -526,21 +527,6 @@ function normalizeAgentSettings(prev: AgentSettings): AgentSettings {
 }
 
 // Bot icon SVG component
-const BotIcon: React.FC<{ className?: string; size?: number }> = ({
-  className = "",
-  size = 24,
-}) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    width={size}
-    height={size}
-    className={className}
-  >
-    <path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7h1a1 1 0 011 1v3a1 1 0 01-1 1h-1v1a2 2 0 01-2 2H5a2 2 0 01-2-2v-1H2a1 1 0 01-1-1v-3a1 1 0 011-1h1a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2zm-3 9a1 1 0 00-1 1v2a1 1 0 002 0v-2a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v2a1 1 0 002 0v-2a1 1 0 00-1-1z" />
-  </svg>
-);
-
 // Input component with label and required indicator
 const FormField: React.FC<{
   label: string;
@@ -652,6 +638,7 @@ const Section: React.FC<{
 }> = ({ title, icon, isOpen, onToggle, children, badge }) => (
   <div className="border border-gray-300 dark:border-gray-700 rounded-lg mb-3 overflow-hidden">
     <button
+      type="button"
       onClick={onToggle}
       className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-800/50 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
     >
@@ -1036,7 +1023,7 @@ const AgentSettingsSidebar: React.FC<AgentSettingsSidebarProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-agora-accent-blue/15 rounded-xl">
-              <BotIcon className="text-agora-accent-blue" size={28} />
+              <AgentGlyph className="text-agora-accent-blue" size="stage" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -1076,7 +1063,7 @@ const AgentSettingsSidebar: React.FC<AgentSettingsSidebarProps> = ({
           {/* LLM Section */}
           <Section
             title="LLM Configuration"
-            icon={<BotIcon size={20} />}
+            icon={<AgentGlyph size="control" />}
             isOpen={expandedSections.llm}
             onToggle={() => toggleSection("llm")}
             badge="Required"
