@@ -29,12 +29,43 @@ export function hydrateAgentProviderCredentials(
   >;
 
   const llm = asRecord(hydrated.llm);
-  if (
-    llm &&
-    llm.credential_mode !== "managed" &&
-    shouldInject(llm.api_key)
-  ) {
-    llm.api_key = firstValue(env.LLM_API_KEY, env.NEXT_PUBLIC_LLM_API_KEY);
+  if (llm) {
+    const providerConfig = asRecord(llm.provider_config);
+    const isBedrock =
+      providerConfig?.provider === "amazon_bedrock" || llm.style === "bedrock";
+    const isVertex =
+      providerConfig?.provider === "google_vertex_ai" ||
+      String(llm.url ?? "").includes("aiplatform.googleapis.com");
+
+    if (llm.credential_mode !== "managed") {
+      if (shouldInject(llm.api_key)) {
+        llm.api_key = isBedrock
+          ? firstValue(env.BEDROCK_API_KEY, env.LLM_API_KEY)
+          : isVertex
+            ? firstValue(env.GOOGLE_VERTEX_ACCESS_TOKEN, env.LLM_API_KEY)
+            : firstValue(env.LLM_API_KEY, env.NEXT_PUBLIC_LLM_API_KEY);
+      }
+      if (isBedrock) {
+        if (shouldInject(llm.access_key)) {
+          llm.access_key = firstValue(env.BEDROCK_AWS_ACCESS_KEY_ID);
+        }
+        if (shouldInject(llm.secret_key)) {
+          llm.secret_key = firstValue(env.BEDROCK_AWS_SECRET_ACCESS_KEY);
+        }
+
+        const params = asRecord(llm.params);
+        if (shouldInject(llm.model) && params?.model) {
+          llm.model = String(params.model);
+        }
+        if (params) {
+          delete params.model;
+          if (Object.keys(params).length === 0) delete llm.params;
+        }
+      }
+    }
+
+    // Used only by the settings UI; it is not part of Agora's join schema.
+    delete llm.provider_config;
   }
 
   const mllm = asRecord(hydrated.mllm);

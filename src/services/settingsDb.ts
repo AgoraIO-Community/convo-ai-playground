@@ -118,6 +118,8 @@ export function encodeStoredAgentSettings(
 function maskKeysForPersistence(settings: AgentSettings): AgentSettings {
   const out = JSON.parse(JSON.stringify(settings)) as AgentSettings;
   if (out.llm?.api_key?.trim()) out.llm.api_key = MASKED_PLACEHOLDER;
+  if (out.llm?.access_key?.trim()) out.llm.access_key = MASKED_PLACEHOLDER;
+  if (out.llm?.secret_key?.trim()) out.llm.secret_key = MASKED_PLACEHOLDER;
   if (out.mllm?.api_key?.trim()) out.mllm.api_key = MASKED_PLACEHOLDER;
   if (out.tts?.params && typeof out.tts.params === "object") {
     const p = out.tts.params as Record<string, unknown>;

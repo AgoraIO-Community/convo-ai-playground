@@ -60,6 +60,64 @@ describe("hydrateAgentProviderCredentials", () => {
     expect(hydrated).not.toBe(input);
   });
 
+  it("hydrates and normalizes Amazon Bedrock credentials", () => {
+    const hydrated = hydrateAgentProviderCredentials(
+      {
+        llm: {
+          credential_mode: "byok",
+          vendor: "custom",
+          style: "bedrock",
+          api_key: "",
+          access_key: "",
+          secret_key: "",
+          region: "ap-south-1",
+          model: "amazon.nova-lite-v1:0",
+          params: { model: "amazon.nova-lite-v1:0" },
+          provider_config: { provider: "amazon_bedrock" },
+        },
+      },
+      {
+        BEDROCK_API_KEY: "bedrock-api-key",
+        BEDROCK_AWS_ACCESS_KEY_ID: "aws-access-key",
+        BEDROCK_AWS_SECRET_ACCESS_KEY: "aws-secret-key",
+      },
+    );
+
+    expect(hydrated).toMatchObject({
+      llm: {
+        api_key: "bedrock-api-key",
+        access_key: "aws-access-key",
+        secret_key: "aws-secret-key",
+        region: "ap-south-1",
+        model: "amazon.nova-lite-v1:0",
+      },
+    });
+    expect(hydrated.llm).not.toHaveProperty("provider_config");
+    expect(hydrated.llm).not.toHaveProperty("params.model");
+  });
+
+  it("uses the server-side Google Vertex access token", () => {
+    const hydrated = hydrateAgentProviderCredentials(
+      {
+        llm: {
+          credential_mode: "byok",
+          vendor: "custom",
+          style: "gemini",
+          api_key: "",
+          url: "https://us-central1-aiplatform.googleapis.com/v1/projects/example/locations/us-central1/publishers/google/models/gemini-2.0-flash-001:streamGenerateContent?alt=sse",
+          params: { model: "gemini-2.0-flash-001" },
+          provider_config: { provider: "google_vertex_ai" },
+        },
+      },
+      { GOOGLE_VERTEX_ACCESS_TOKEN: "vertex-access-token" },
+    );
+
+    expect(hydrated).toMatchObject({
+      llm: { api_key: "vertex-access-token" },
+    });
+    expect(hydrated.llm).not.toHaveProperty("provider_config");
+  });
+
   it("injects the dedicated OpenAI ASR key into params.api_key", () => {
     const hydrated = hydrateAgentProviderCredentials(
       {

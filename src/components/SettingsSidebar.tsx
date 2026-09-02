@@ -432,6 +432,14 @@ import {
 import InfoTooltip from "@/components/common/InfoTooltip";
 import ElevenLabsVoicePicker from "@/components/ElevenLabsVoicePicker";
 import {
+  buildBedrockUrl,
+  buildVertexUrl,
+  DEFAULT_BEDROCK_MODEL,
+  DEFAULT_BEDROCK_REGION,
+  DEFAULT_VERTEX_LOCATION,
+  DEFAULT_VERTEX_MODEL,
+} from "@/lib/agora/llmProviderUrls";
+import {
   MdExpandMore,
   MdExpandLess,
   MdRecordVoiceOver,
@@ -1719,6 +1727,12 @@ function maskKeysInObject(
   if (out.llm && typeof out.llm === "object") {
     const llm = out.llm as Record<string, unknown>;
     if (String(llm.api_key ?? "").trim()) llm.api_key = JOIN_PAYLOAD_MASK;
+    if (String(llm.access_key ?? "").trim()) {
+      llm.access_key = JOIN_PAYLOAD_MASK;
+    }
+    if (String(llm.secret_key ?? "").trim()) {
+      llm.secret_key = JOIN_PAYLOAD_MASK;
+    }
   }
   if (out.mllm && typeof out.mllm === "object") {
     const mllm = out.mllm as Record<string, unknown>;
@@ -2189,6 +2203,12 @@ const AgentSettingsSidebarContent: React.FC<{
   const isOpenAIByok =
     settings.llm.credential_mode !== "managed" &&
     selectedLLMVendor === "openai";
+  const isBedrockByok =
+    settings.llm.credential_mode !== "managed" &&
+    selectedLLMVendor === "amazon_bedrock";
+  const isVertexByok =
+    settings.llm.credential_mode !== "managed" &&
+    selectedLLMVendor === "google_vertex_ai";
   const persistedLLMModel = settings.llm.params?.model ?? "";
   const llmModelControlValue = isOpenAIByok
     ? getOpenAIModelControlValue(persistedLLMModel)
@@ -2242,6 +2262,17 @@ const AgentSettingsSidebarContent: React.FC<{
       if (existingSettings.avatar?.vendor) {
         setSelectedAvatarVendor(existingSettings.avatar.vendor);
       }
+      if (
+        existingSettings.llm?.provider_config?.provider === "amazon_bedrock" ||
+        existingSettings.llm?.style === "bedrock"
+      ) {
+        setSelectedLLMVendor("amazon_bedrock");
+      } else if (
+        existingSettings.llm?.provider_config?.provider === "google_vertex_ai" ||
+        existingSettings.llm?.url?.includes("aiplatform.googleapis.com")
+      ) {
+        setSelectedLLMVendor("google_vertex_ai");
+      }
       if (existingSettings.tts?.vendor in TTS_PRESETS) {
         setSelectedTTSVendor(existingSettings.tts.vendor as TTSVendor);
       }
@@ -2269,6 +2300,29 @@ const AgentSettingsSidebarContent: React.FC<{
       ...prev,
       llm: { ...prev.llm, ...updates },
     }));
+  };
+
+  const updateLLMModel = (model: string) => {
+    setSettings((prev) => {
+      const nextLlm: LLMConfig = {
+        ...prev.llm,
+        params: { ...prev.llm.params, model },
+      };
+      if (selectedLLMVendor === "amazon_bedrock") {
+        nextLlm.model = model;
+        nextLlm.url = buildBedrockUrl(
+          nextLlm.region ?? DEFAULT_BEDROCK_REGION,
+          model,
+        );
+      } else if (selectedLLMVendor === "google_vertex_ai") {
+        nextLlm.url = buildVertexUrl(
+          nextLlm.provider_config?.project_id ?? "",
+          nextLlm.provider_config?.location ?? DEFAULT_VERTEX_LOCATION,
+          model,
+        );
+      }
+      return { ...prev, llm: nextLlm };
+    });
   };
 
   const updateMllm = (updates: Partial<MllmConfig>) => {
@@ -2407,22 +2461,64 @@ const AgentSettingsSidebarContent: React.FC<{
     }
     setSelectedLLMVendor(vendor);
     const preset = LLM_PRESETS[vendor];
-    updateLLM({
-      vendor:
-        vendor === "openai"
-          ? "openai"
-          : vendor === "azure_openai"
-            ? "azure"
-            : vendor === "xai"
-              ? "xai"
-              : "custom",
-      url: preset.url || "",
-      style: preset.style,
-      headers: preset.headers,
-      params: {
-        ...settings.llm.params,
-        model: preset.defaultModel || "",
-      },
+    setSettings((prev) => {
+      const base = {
+        ...prev.llm,
+        vendor:
+          vendor === "openai"
+            ? ("openai" as const)
+            : vendor === "azure_openai"
+              ? ("azure" as const)
+              : vendor === "xai"
+                ? ("xai" as const)
+                : ("custom" as const),
+        url: preset.url || "",
+        style: preset.style,
+        headers: preset.headers,
+        params: {
+          ...prev.llm.params,
+          model: preset.defaultModel || "",
+        },
+        access_key: undefined,
+        secret_key: undefined,
+        region: undefined,
+        model: undefined,
+        provider_config: undefined,
+      } satisfies LLMConfig;
+
+      if (vendor === "amazon_bedrock") {
+        return {
+          ...prev,
+          llm: {
+            ...base,
+            api_key: "",
+            access_key: "",
+            secret_key: "",
+            region: DEFAULT_BEDROCK_REGION,
+            model: DEFAULT_BEDROCK_MODEL,
+            provider_config: { provider: "amazon_bedrock" },
+            url: buildBedrockUrl(DEFAULT_BEDROCK_REGION, DEFAULT_BEDROCK_MODEL),
+          },
+        };
+      }
+
+      if (vendor === "google_vertex_ai") {
+        return {
+          ...prev,
+          llm: {
+            ...base,
+            api_key: "",
+            provider_config: {
+              provider: "google_vertex_ai",
+              project_id: "",
+              location: DEFAULT_VERTEX_LOCATION,
+            },
+            url: buildVertexUrl("", DEFAULT_VERTEX_LOCATION, DEFAULT_VERTEX_MODEL),
+          },
+        };
+      }
+
+      return { ...prev, llm: base };
     });
   };
 
@@ -2843,18 +2939,158 @@ const AgentSettingsSidebarContent: React.FC<{
               </FormField>
 
               <FormField
-                label="API Key"
+                label={
+                  isBedrockByok
+                    ? "Bedrock API Key"
+                    : isVertexByok
+                      ? "Google Cloud access token"
+                      : "API Key"
+                }
                 required
                 tooltip="Verification key for the LLM."
-                hint="Leave empty to use server-configured key (LLM_API_KEY in .env)"
+                hint={
+                  isBedrockByok
+                    ? "Leave empty to use BEDROCK_API_KEY from the server environment."
+                    : isVertexByok
+                      ? "Use a current OAuth access token, or leave empty to use GOOGLE_VERTEX_ACCESS_TOKEN."
+                      : "Leave empty to use server-configured key (LLM_API_KEY in .env)"
+                }
               >
                 <Input
                   type="password"
-                  value={settings.llm.api_key}
-                  onChange={(e) => updateLLM({ api_key: e.target.value })}
-                  placeholder="Leave empty for server key, or enter your LLM API key"
+                  aria-label={
+                    isBedrockByok
+                      ? "Bedrock API Key"
+                      : isVertexByok
+                        ? "Google Cloud access token"
+                        : "API Key"
+                  }
+                  value={maskKeyForDisplay(settings.llm.api_key)}
+                  onChange={(event) =>
+                    keyChange(event.target.value, settings.llm.api_key, (api_key) =>
+                      updateLLM({ api_key }),
+                    )
+                  }
+                  placeholder="Leave empty for the server key"
                 />
               </FormField>
+
+              {isBedrockByok && (
+                <>
+                  <FormField
+                    label="AWS Access Key ID"
+                    required
+                    hint="Leave empty to use BEDROCK_AWS_ACCESS_KEY_ID."
+                  >
+                    <Input
+                      type="password"
+                      aria-label="AWS Access Key ID"
+                      value={maskKeyForDisplay(settings.llm.access_key)}
+                      onChange={(event) =>
+                        keyChange(
+                          event.target.value,
+                          settings.llm.access_key,
+                          (access_key) => updateLLM({ access_key }),
+                        )
+                      }
+                      placeholder="Leave empty for the server credential"
+                    />
+                  </FormField>
+                  <FormField
+                    label="AWS Secret Access Key"
+                    required
+                    hint="Leave empty to use BEDROCK_AWS_SECRET_ACCESS_KEY."
+                  >
+                    <Input
+                      type="password"
+                      aria-label="AWS Secret Access Key"
+                      value={maskKeyForDisplay(settings.llm.secret_key)}
+                      onChange={(event) =>
+                        keyChange(
+                          event.target.value,
+                          settings.llm.secret_key,
+                          (secret_key) => updateLLM({ secret_key }),
+                        )
+                      }
+                      placeholder="Leave empty for the server credential"
+                    />
+                  </FormField>
+                  <FormField label="AWS Region" required>
+                    <Input
+                      aria-label="AWS Region"
+                      value={settings.llm.region ?? DEFAULT_BEDROCK_REGION}
+                      onChange={(event) => {
+                        const region = event.target.value;
+                        updateLLM({
+                          region,
+                          url: buildBedrockUrl(
+                            region,
+                            settings.llm.model ?? persistedLLMModel,
+                          ),
+                        });
+                      }}
+                      placeholder={DEFAULT_BEDROCK_REGION}
+                    />
+                  </FormField>
+                </>
+              )}
+
+              {isVertexByok && (
+                <>
+                  <FormField label="Google Cloud project ID" required>
+                    <Input
+                      aria-label="Google Cloud project ID"
+                      value={settings.llm.provider_config?.project_id ?? ""}
+                      onChange={(event) => {
+                        const projectId = event.target.value;
+                        const location =
+                          settings.llm.provider_config?.location ??
+                          DEFAULT_VERTEX_LOCATION;
+                        updateLLM({
+                          provider_config: {
+                            provider: "google_vertex_ai",
+                            project_id: projectId,
+                            location,
+                          },
+                          url: buildVertexUrl(
+                            projectId,
+                            location,
+                            persistedLLMModel,
+                          ),
+                        });
+                      }}
+                      placeholder="my-google-cloud-project"
+                    />
+                  </FormField>
+                  <FormField label="Vertex AI location" required>
+                    <Input
+                      aria-label="Vertex AI location"
+                      value={
+                        settings.llm.provider_config?.location ??
+                        DEFAULT_VERTEX_LOCATION
+                      }
+                      onChange={(event) => {
+                        const location = event.target.value;
+                        const projectId =
+                          settings.llm.provider_config?.project_id ?? "";
+                        updateLLM({
+                          provider_config: {
+                            provider: "google_vertex_ai",
+                            project_id: projectId,
+                            location,
+                          },
+                          url: buildVertexUrl(
+                            projectId,
+                            location,
+                            persistedLLMModel,
+                          ),
+                        });
+                      }}
+                      placeholder={DEFAULT_VERTEX_LOCATION}
+                    />
+                  </FormField>
+                </>
+              )}
             </>
           )}
 
@@ -2869,18 +3105,14 @@ const AgentSettingsSidebarContent: React.FC<{
                   value={llmModelControlValue}
                   onChange={(value) => {
                     setCustomOpenAIModelError(null);
-                    updateLLM({
-                      params: {
-                        ...settings.llm.params,
-                        model:
-                          value === OPENAI_CUSTOM_MODEL_VALUE
-                            ? getOpenAIModelControlValue(persistedLLMModel) ===
-                              OPENAI_CUSTOM_MODEL_VALUE
-                              ? persistedLLMModel
-                              : ""
-                            : value,
-                      },
-                    });
+                    updateLLMModel(
+                      value === OPENAI_CUSTOM_MODEL_VALUE
+                        ? getOpenAIModelControlValue(persistedLLMModel) ===
+                          OPENAI_CUSTOM_MODEL_VALUE
+                          ? persistedLLMModel
+                          : ""
+                        : value,
+                    );
                   }}
                   options={llmModelOptions}
                   error={Boolean(customOpenAIModelError)}
@@ -2913,12 +3145,9 @@ const AgentSettingsSidebarContent: React.FC<{
               </>
             ) : (
               <Input
+                aria-label="Model"
                 value={settings.llm.params?.model || ""}
-                onChange={(e) =>
-                  updateLLM({
-                    params: { ...settings.llm.params, model: e.target.value },
-                  })
-                }
+                onChange={(e) => updateLLMModel(e.target.value)}
                 placeholder="Model name"
               />
             )}

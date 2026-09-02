@@ -27,7 +27,12 @@ describe("settingsDb agent record codec", () => {
     const encoded = encodeStoredAgentSettings({
       name: "current-agent",
       schemaVersion: ENGINE_SETTINGS_SCHEMA_VERSION,
-      llm: { url: "https://llm.example.test", api_key: "llm-secret" },
+      llm: {
+        url: "https://llm.example.test",
+        api_key: "llm-secret",
+        access_key: "aws-access-key",
+        secret_key: "aws-secret-key",
+      },
       tts: {
         vendor: "sarvam",
         params: {
@@ -40,6 +45,8 @@ describe("settingsDb agent record codec", () => {
 
     expect(encoded.schemaVersion).toBe(ENGINE_SETTINGS_SCHEMA_VERSION);
     expect(encoded.value.llm.api_key).toBe("***MASKED***");
+    expect(encoded.value.llm.access_key).toBe("***MASKED***");
+    expect(encoded.value.llm.secret_key).toBe("***MASKED***");
     expect(encoded.value.tts.params).toMatchObject({
       key: "***MASKED***",
       api_subscription_key: "***MASKED***",

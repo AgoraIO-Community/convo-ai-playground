@@ -21,6 +21,8 @@ export type LLMVendor =
   | "dify"
   | "minimax"
   | "xai"
+  | "amazon_bedrock"
+  | "google_vertex_ai"
   | "custom";
 
 export type CredentialMode = "managed" | "byok";
@@ -78,6 +80,20 @@ export interface LLMConfig {
   url: string;
   /** API key for authentication (required) */
   api_key: string;
+  /** Amazon Bedrock API key (distinct from the AWS signing credentials). */
+  access_key?: string;
+  /** AWS access-key secret used by the Bedrock adapter. */
+  secret_key?: string;
+  /** AWS region used by the Bedrock adapter. */
+  region?: string;
+  /** Bedrock model identifier; Agora expects this at the LLM root. */
+  model?: string;
+  /** UI-only metadata used to edit provider-specific configuration. */
+  provider_config?: {
+    provider: "amazon_bedrock" | "google_vertex_ai";
+    project_id?: string;
+    location?: string;
+  };
   /** Custom headers merged into LLM requests. */
   headers?: Record<string, string> | string;
   /** System messages for context */
@@ -93,7 +109,7 @@ export interface LLMConfig {
   /** Number of conversation history messages (1-1024, default 32) */
   max_history?: number;
   /** Request style supported by the current engine. */
-  style?: "openai" | "gemini" | "anthropic" | "dify";
+  style?: "openai" | "gemini" | "anthropic" | "dify" | "bedrock";
   /** Model-specific parameters */
   params?: {
     model: string;
@@ -744,7 +760,7 @@ export interface VendorPreset {
   defaultModel?: string;
   models?: string[];
   requiresApiKey: boolean;
-  style?: "openai" | "gemini" | "anthropic" | "dify";
+  style?: "openai" | "gemini" | "anthropic" | "dify" | "bedrock";
   headers?: string;
 }
 
@@ -835,6 +851,22 @@ export const LLM_PRESETS: Record<LLMVendor, VendorPreset> = {
     models: ["grok-4-latest", "grok-3-latest"],
     requiresApiKey: true,
     style: "openai",
+  },
+  amazon_bedrock: {
+    label: "Amazon Bedrock",
+    value: "amazon_bedrock",
+    url: "https://bedrock-runtime.us-east-1.amazonaws.com/model/us.anthropic.claude-sonnet-4-20250514-v1:0/converse-stream",
+    defaultModel: "us.anthropic.claude-sonnet-4-20250514-v1:0",
+    requiresApiKey: true,
+    style: "bedrock",
+  },
+  google_vertex_ai: {
+    label: "Google Vertex AI",
+    value: "google_vertex_ai",
+    url: "",
+    defaultModel: "gemini-2.0-flash-001",
+    requiresApiKey: true,
+    style: "gemini",
   },
   custom: {
     label: "Custom (OpenAI-compatible)",

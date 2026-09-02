@@ -226,6 +226,81 @@ describe("SettingsSidebar transcript transport", () => {
     );
   });
 
+  it("configures the documented Amazon Bedrock LLM fields", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /LLM Configuration/i }));
+    chooseFromField("Provider", "Amazon Bedrock");
+    fireEvent.change(screen.getByLabelText("AWS Access Key ID"), {
+      target: { value: "aws-access-key" },
+    });
+    fireEvent.change(screen.getByLabelText("AWS Secret Access Key"), {
+      target: { value: "aws-secret-key" },
+    });
+    fireEvent.change(screen.getByLabelText("AWS Region"), {
+      target: { value: "ap-south-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Model"), {
+      target: { value: "amazon.nova-lite-v1:0" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].llm).toMatchObject({
+      vendor: "custom",
+      style: "bedrock",
+      access_key: "aws-access-key",
+      secret_key: "aws-secret-key",
+      region: "ap-south-1",
+      model: "amazon.nova-lite-v1:0",
+      url: "https://bedrock-runtime.ap-south-1.amazonaws.com/model/amazon.nova-lite-v1:0/converse-stream",
+    });
+  });
+
+  it("builds the Google Vertex AI streaming URL from its settings", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /LLM Configuration/i }));
+    chooseFromField("Provider", "Google Vertex AI");
+    fireEvent.change(screen.getByLabelText("Google Cloud project ID"), {
+      target: { value: "example-project" },
+    });
+    fireEvent.change(screen.getByLabelText("Vertex AI location"), {
+      target: { value: "europe-west4" },
+    });
+    fireEvent.change(screen.getByLabelText("Model"), {
+      target: { value: "gemini-2.0-flash-001" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].llm).toMatchObject({
+      vendor: "custom",
+      style: "gemini",
+      url: "https://europe-west4-aiplatform.googleapis.com/v1/projects/example-project/locations/europe-west4/publishers/google/models/gemini-2.0-flash-001:streamGenerateContent?alt=sse",
+      params: { model: "gemini-2.0-flash-001" },
+      provider_config: {
+        provider: "google_vertex_ai",
+        project_id: "example-project",
+        location: "europe-west4",
+      },
+    });
+  });
+
   it("builds editable Sarvam Bulbul v2 provider placeholders", () => {
     render(
       <SettingsSidebar

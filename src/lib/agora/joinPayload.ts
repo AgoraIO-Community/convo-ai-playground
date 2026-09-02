@@ -77,7 +77,11 @@ function buildMcpServers(settings: AgentSettings): Record<string, unknown>[] {
 }
 
 function buildLlm(settings: AgentSettings, username: string): Record<string, unknown> {
-  const llm = { ...clone(settings.llm), mcp_servers: undefined };
+  const llm = {
+    ...clone(settings.llm),
+    mcp_servers: undefined,
+    provider_config: undefined,
+  };
   const mcpServers = buildMcpServers(settings);
   const enableRtm = settings.advanced_features?.enable_rtm === true;
   return compact({
@@ -188,6 +192,8 @@ export function buildMaskedJoinPreview(
       normalizedKey === "agora_token" ||
       normalizedKey === "api_key" ||
       normalizedKey === "api_subscription_key" ||
+      normalizedKey === "access_key" ||
+      normalizedKey === "secret_key" ||
       normalizedKey === "key" ||
       normalizedKey === "authorization" ||
       normalizedKey.endsWith("_secret")

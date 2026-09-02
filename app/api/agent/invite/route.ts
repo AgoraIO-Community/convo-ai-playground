@@ -54,6 +54,21 @@ function shouldInjectServerKey(v: string | undefined): boolean {
   );
 }
 
+function usesProviderSpecificLlmCredentials(
+  llm: Record<string, unknown>,
+): boolean {
+  const providerConfig =
+    llm.provider_config && typeof llm.provider_config === "object"
+      ? (llm.provider_config as Record<string, unknown>)
+      : undefined;
+  return (
+    llm.style === "bedrock" ||
+    providerConfig?.provider === "amazon_bedrock" ||
+    providerConfig?.provider === "google_vertex_ai" ||
+    String(llm.url ?? "").includes("aiplatform.googleapis.com")
+  );
+}
+
 /** Map UI vendor names to their Agora join API equivalents. */
 function agoraAvatarVendorForApi(vendor: string | undefined): string {
   if (!vendor || vendor === "heygen") return "liveavatar";
@@ -230,6 +245,7 @@ async function handleCustomPayloadJoin(
   if (
     llm &&
     llm.credential_mode !== "managed" &&
+    !usesProviderSpecificLlmCredentials(llm) &&
     shouldInjectServerKey(llm.api_key as string)
   ) {
     llm.api_key = (
@@ -715,7 +731,9 @@ export async function POST(request: NextRequest) {
 
     // Build LLM config (inject server key when client does not provide one)
     const llmApiKey =
-      llm.credential_mode !== "managed" && shouldInjectServerKey(llm.api_key)
+      llm.credential_mode !== "managed" &&
+      !usesProviderSpecificLlmCredentials(llm as unknown as Record<string, unknown>) &&
+      shouldInjectServerKey(llm.api_key)
       ? (
           process.env.LLM_API_KEY ||
           process.env.NEXT_PUBLIC_LLM_API_KEY ||
@@ -727,6 +745,7 @@ export async function POST(request: NextRequest) {
       api_key: llmApiKey,
     };
     delete llmPayload.mcp_servers;
+    delete llmPayload.provider_config;
 
     if (llm.headers) {
       llmPayload.headers = llm.headers;

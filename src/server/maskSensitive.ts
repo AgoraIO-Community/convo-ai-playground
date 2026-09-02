@@ -2,6 +2,8 @@ const SENSITIVE_KEYS = new Set([
   "authorization",
   "api_key",
   "api_subscription_key",
+  "access_key",
+  "secret_key",
   "key",
   "password",
   "token",
