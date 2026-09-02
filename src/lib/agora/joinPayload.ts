@@ -187,6 +187,7 @@ export function buildMaskedJoinPreview(
       normalizedKey === "token" ||
       normalizedKey === "agora_token" ||
       normalizedKey === "api_key" ||
+      normalizedKey === "api_subscription_key" ||
       normalizedKey === "key" ||
       normalizedKey === "authorization" ||
       normalizedKey.endsWith("_secret")

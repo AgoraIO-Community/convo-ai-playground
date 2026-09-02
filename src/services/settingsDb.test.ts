@@ -28,13 +28,22 @@ describe("settingsDb agent record codec", () => {
       name: "current-agent",
       schemaVersion: ENGINE_SETTINGS_SCHEMA_VERSION,
       llm: { url: "https://llm.example.test", api_key: "llm-secret" },
-      tts: { vendor: "openai", params: { key: "tts-secret" } },
+      tts: {
+        vendor: "sarvam",
+        params: {
+          key: "tts-secret",
+          api_subscription_key: "sarvam-secret",
+        },
+      },
       asr: { vendor: "deepgram", params: { api_key: "asr-secret" } },
     });
 
     expect(encoded.schemaVersion).toBe(ENGINE_SETTINGS_SCHEMA_VERSION);
     expect(encoded.value.llm.api_key).toBe("***MASKED***");
-    expect(encoded.value.tts.params).toMatchObject({ key: "***MASKED***" });
+    expect(encoded.value.tts.params).toMatchObject({
+      key: "***MASKED***",
+      api_subscription_key: "***MASKED***",
+    });
     expect(encoded.value.asr?.params).toMatchObject({
       api_key: "***MASKED***",
     });

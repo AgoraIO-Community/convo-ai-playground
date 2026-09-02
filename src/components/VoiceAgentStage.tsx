@@ -2,6 +2,7 @@
 
 import React from "react";
 import AgentGlyph from "@/components/AgentGlyph";
+import AgentRuntimeId from "@/components/AgentRuntimeId";
 import { EAgentState } from "@/types/agora";
 
 type AgentVisualState =
@@ -14,6 +15,7 @@ type AgentVisualState =
   | "silent";
 
 interface VoiceAgentStageProps {
+  agentId?: string | null;
   agentName: string;
   agentState: EAgentState;
   isAgentActive: boolean;
@@ -43,6 +45,7 @@ export function getAgentVisualState(
 }
 
 const VoiceAgentStage: React.FC<VoiceAgentStageProps> = ({
+  agentId,
   agentName,
   agentState,
   isAgentActive,
@@ -85,6 +88,11 @@ const VoiceAgentStage: React.FC<VoiceAgentStageProps> = ({
         <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
           {agentName}
         </h2>
+        <AgentRuntimeId
+          agentId={agentId}
+          compact={compact}
+          className="mt-2"
+        />
         <p
           className="mt-1 text-sm font-medium text-cyan-200/90"
           aria-live="polite"

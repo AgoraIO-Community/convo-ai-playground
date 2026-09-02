@@ -45,6 +45,7 @@ import {
   isHttpUrl,
 } from "@/constants/lemonSlice";
 import { ELEVENLABS_DEFAULT_VOICE_ID } from "@/constants/elevenlabsDefaults";
+import { SARVAM_BULBUL_V2_PLACEHOLDER_PARAMS } from "@/constants/sarvamTts";
 import { queryAgentTurns } from "@/api/agentApi";
 import type {
   AgentSessionRecord,
@@ -500,6 +501,48 @@ const keyChange = (
   else setKey(newValue);
 };
 
+const PROVIDER_CREDENTIAL_PARAM_KEYS = new Set([
+  "key",
+  "api_key",
+  "api_subscription_key",
+]);
+const NO_PROTECTED_CREDENTIAL_KEYS = new Set<string>();
+
+const ASR_PROTECTED_CREDENTIAL_KEYS: Partial<
+  Record<ASRVendor, ReadonlySet<string>>
+> = {
+  deepgram: new Set(["key", "api_key"]),
+  gemini: new Set(["key", "api_key"]),
+  microsoft: new Set(["key", "api_key"]),
+  openai: new Set(["key", "api_key"]),
+};
+
+const providerParamsForEditor = (
+  params: Record<string, unknown> | undefined,
+  credentialKeys: ReadonlySet<string> = PROVIDER_CREDENTIAL_PARAM_KEYS,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(params ?? {}).filter(
+      ([key]) => !credentialKeys.has(key.toLowerCase()),
+    ),
+  );
+
+const mergeEditedProviderParams = (
+  current: Record<string, unknown> | undefined,
+  edited: Record<string, unknown>,
+  credentialKeys: ReadonlySet<string> = PROVIDER_CREDENTIAL_PARAM_KEYS,
+): Record<string, unknown> => ({
+  ...providerParamsForEditor(edited, credentialKeys),
+  ...Object.fromEntries(
+    Object.entries(current ?? {}).filter(([key]) =>
+      credentialKeys.has(key.toLowerCase()),
+    ),
+  ),
+});
+
+const openAIASRLanguage = (language: string): string =>
+  language.split("-")[0]?.toLowerCase() || "en";
+
 const getDefaultTTSVendor = (): TTSVendor => {
   const vendor = getEnvVar("TTS_VENDOR", "microsoft");
   if (vendor in TTS_PRESETS && vendor !== "fish_audio" && vendor !== "polly") {
@@ -538,6 +581,8 @@ const getDefaultTTSParams = (vendor: TTSVendor): Record<string, unknown> => {
       };
     case "generic_http":
       return {};
+    case "sarvam":
+      return { key: "", ...SARVAM_BULBUL_V2_PLACEHOLDER_PARAMS };
     case "microsoft":
       return {
         key: "",
@@ -554,7 +599,7 @@ const getDefaultTTSParams = (vendor: TTSVendor): Record<string, unknown> => {
   }
 };
 
-const getDefaultASRConfig = (vendor: ASRVendor): ASRConfig => {
+export const getDefaultASRConfig = (vendor: ASRVendor): ASRConfig => {
   const language = getEnvVar("ASR_LANGUAGE", "en-US");
   // API keys are never read client-side; server injects from env when key is empty
   switch (vendor) {
@@ -588,6 +633,19 @@ const getDefaultASRConfig = (vendor: ASRVendor): ASRConfig => {
           sample_rate: 16000,
           language,
           word_timestamp: true,
+        },
+      };
+    case "openai":
+      return {
+        vendor: "openai",
+        language,
+        params: {
+          api_key: "",
+          input_audio_transcription: {
+            model: "gpt-4o-mini-transcribe",
+            prompt: "Transcribe the conversation accurately.",
+            language: openAIASRLanguage(language),
+          },
         },
       };
     case "ares":
@@ -1672,6 +1730,9 @@ function maskKeysInObject(
   if (tts?.params && typeof tts.params === "object") {
     const p = tts.params as Record<string, unknown>;
     if (String(p.key ?? "").trim()) p.key = JOIN_PAYLOAD_MASK;
+    if (String(p.api_subscription_key ?? "").trim()) {
+      p.api_subscription_key = JOIN_PAYLOAD_MASK;
+    }
   }
   const asr = out.asr as Record<string, unknown> | undefined;
   if (asr?.params && typeof asr.params === "object") {
@@ -2397,6 +2458,8 @@ const AgentSettingsSidebarContent: React.FC<{
         voice: "alloy",
         speed: 1.0,
       });
+    } else if (vendor === "sarvam") {
+      Object.assign(defaultParams, SARVAM_BULBUL_V2_PLACEHOLDER_PARAMS);
     } else if (vendor === "generic_http") {
       updateTTS({
         vendor,
@@ -2444,6 +2507,15 @@ const AgentSettingsSidebarContent: React.FC<{
         sample_rate: 16000,
         language,
         word_timestamp: true,
+      });
+    } else if (vendor === "openai") {
+      Object.assign(defaultParams, {
+        api_key: "",
+        input_audio_transcription: {
+          model: "gpt-4o-mini-transcribe",
+          prompt: "Transcribe the conversation accurately.",
+          language: "en",
+        },
       });
     }
 
@@ -3353,7 +3425,7 @@ const AgentSettingsSidebarContent: React.FC<{
             <FormField
               label="API Key"
               required
-              hint="Leave empty to use server-configured key (ELEVENLABS_API_KEY / MICROSOFT_TTS_KEY / OPENAI_TTS_KEY in .env)"
+              hint="Leave empty to use the matching server-configured TTS key in .env."
             >
               <Input
                 type="password"
@@ -3592,14 +3664,24 @@ const AgentSettingsSidebarContent: React.FC<{
               <Textarea
                 key={`tts-params-${selectedTTSVendor}`}
                 rows={5}
-                defaultValue={JSON.stringify(settings.tts.params ?? {}, null, 2)}
+                defaultValue={JSON.stringify(
+                  providerParamsForEditor(
+                    settings.tts.params as Record<string, unknown>,
+                  ),
+                  null,
+                  2,
+                )}
                 onBlur={(event) => {
                   try {
+                    const edited = JSON.parse(event.target.value) as Record<
+                      string,
+                      unknown
+                    >;
                     updateTTS({
-                      params: JSON.parse(event.target.value) as Record<
-                        string,
-                        unknown
-                      >,
+                      params: mergeEditedProviderParams(
+                        settings.tts.params as Record<string, unknown>,
+                        edited,
+                      ),
                     });
                   } catch {
                     showToast("TTS provider parameters must be valid JSON.", "error");
@@ -3664,22 +3746,38 @@ const AgentSettingsSidebarContent: React.FC<{
           <FormField label="Language" required>
             <CustomSelect
               value={settings.asr?.language || "en-US"}
-              onChange={(language) =>
-                updateASR({
-                  language,
-                  ...(selectedASRVendor === "gemini"
-                    ? {
-                        params: {
-                          ...((settings.asr?.params ?? {}) as Record<
-                            string,
-                            unknown
-                          >),
-                          language,
-                        },
-                      }
-                    : {}),
-                })
-              }
+              onChange={(language) => {
+                const params = (settings.asr?.params ?? {}) as Record<
+                  string,
+                  unknown
+                >;
+                if (selectedASRVendor === "gemini") {
+                  updateASR({ language, params: { ...params, language } });
+                  return;
+                }
+                if (selectedASRVendor === "openai") {
+                  const transcription =
+                    typeof params.input_audio_transcription === "object" &&
+                    params.input_audio_transcription !== null
+                      ? (params.input_audio_transcription as Record<
+                          string,
+                          unknown
+                        >)
+                      : {};
+                  updateASR({
+                    language,
+                    params: {
+                      ...params,
+                      input_audio_transcription: {
+                        ...transcription,
+                        language: openAIASRLanguage(language),
+                      },
+                    },
+                  });
+                  return;
+                }
+                updateASR({ language });
+              }}
               options={SUPPORTED_LANGUAGES.map((lang) => ({
                 value: lang.code,
                 label: `${lang.label} (${lang.code})`,
@@ -3815,6 +3913,27 @@ const AgentSettingsSidebarContent: React.FC<{
               />
             </>
           )}
+          {!asrManaged && selectedASRVendor === "openai" && (
+            <FormField
+              label="OpenAI ASR API Key"
+              required
+              hint="Leave empty to use OPENAI_ASR_KEY or OPENAI_API_KEY from the server environment."
+            >
+              <Input
+                aria-label="OpenAI ASR API Key"
+                type="password"
+                value={maskKeyForDisplay(getASRParam("api_key"))}
+                onChange={(event) =>
+                  keyChange(
+                    event.target.value,
+                    getASRParam("api_key"),
+                    (key) => setASRParam("api_key", key),
+                  )
+                }
+                placeholder="Leave empty for server key, or enter an OpenAI API key"
+              />
+            </FormField>
+          )}
           {!asrManaged && (
             <FormField
               label="Provider parameters (JSON)"
@@ -3823,14 +3942,30 @@ const AgentSettingsSidebarContent: React.FC<{
               <Textarea
                 key={`asr-params-${selectedASRVendor}`}
                 rows={5}
-                defaultValue={JSON.stringify(settings.asr?.params ?? {}, null, 2)}
+                defaultValue={JSON.stringify(
+                  providerParamsForEditor(
+                    settings.asr?.params as Record<string, unknown> | undefined,
+                    ASR_PROTECTED_CREDENTIAL_KEYS[selectedASRVendor] ??
+                      NO_PROTECTED_CREDENTIAL_KEYS,
+                  ),
+                  null,
+                  2,
+                )}
                 onBlur={(event) => {
                   try {
+                    const edited = JSON.parse(event.target.value) as Record<
+                      string,
+                      unknown
+                    >;
                     updateASR({
-                      params: JSON.parse(event.target.value) as Record<
-                        string,
-                        unknown
-                      >,
+                      params: mergeEditedProviderParams(
+                        settings.asr?.params as
+                          | Record<string, unknown>
+                          | undefined,
+                        edited,
+                        ASR_PROTECTED_CREDENTIAL_KEYS[selectedASRVendor] ??
+                          NO_PROTECTED_CREDENTIAL_KEYS,
+                      ),
                     });
                   } catch {
                     showToast("ASR provider parameters must be valid JSON.", "error");

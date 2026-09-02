@@ -65,6 +65,7 @@ describe("VideoCallScreen transcript transport", () => {
       audioMuted: false,
       videoMuted: true,
       isAgentActive: true,
+      agentId: "runtime-agent-123",
       agentState: EAgentState.IDLE,
       agentRtcUid: "agent-1",
       agentAvatarRtcUid: null,
@@ -113,6 +114,7 @@ describe("VideoCallScreen transcript transport", () => {
       "data-experience-mode",
       "voice",
     );
+    expect(screen.getByText("runtime-agent-123")).toBeInTheDocument();
   });
 
   it("publishes the camera before entering video mode and preserves transcript", async () => {

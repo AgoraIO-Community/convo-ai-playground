@@ -1,10 +1,26 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EAgentState } from "@/types/agora";
 import VoiceAgentStage from "./VoiceAgentStage";
 
+const mocks = vi.hoisted(() => ({
+  showToast: vi.fn(),
+  writeText: vi.fn(),
+}));
+
+vi.mock("@/services/uiService", () => ({ showToast: mocks.showToast }));
+
 describe("VoiceAgentStage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.writeText.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: mocks.writeText },
+    });
+  });
+
   it.each([
     [EAgentState.IDLE, "Idle", "idle"],
     [EAgentState.LISTENING, "Listening", "listening"],
@@ -52,5 +68,30 @@ describe("VoiceAgentStage", () => {
       />,
     );
     expect(screen.getByText("Ready")).toBeInTheDocument();
+  });
+
+  it("shows and copies the runtime agent ID below the agent name", async () => {
+    render(
+      <VoiceAgentStage
+        agentId="runtime-agent-123"
+        agentName="Maya"
+        agentState={EAgentState.LISTENING}
+        isAgentActive
+        transcriptionMode="rtm"
+      />,
+    );
+
+    const name = screen.getByRole("heading", { name: "Maya" });
+    const copyButton = screen.getByRole("button", { name: "Copy agent ID" });
+    expect(
+      name.compareDocumentPosition(copyButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText("runtime-agent-123")).toBeInTheDocument();
+
+    fireEvent.click(copyButton);
+    await waitFor(() =>
+      expect(mocks.writeText).toHaveBeenCalledWith("runtime-agent-123"),
+    );
+    expect(mocks.showToast).toHaveBeenCalledWith("Agent ID copied", "success");
   });
 });

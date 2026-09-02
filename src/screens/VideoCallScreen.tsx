@@ -33,6 +33,7 @@ const VideoCallScreen: React.FC = () => {
   const audioMuted = useAppStore((state) => state.audioMuted);
   const videoMuted = useAppStore((state) => state.videoMuted);
   const isAgentActive = useAppStore((state) => state.isAgentActive);
+  const agentId = useAppStore((state) => state.agentId);
   const agentState = useAppStore((state) => state.agentState);
   const agentRtcUid = useAppStore((state) => state.agentRtcUid);
   const agentAvatarRtcUid = useAppStore((state) => state.agentAvatarRtcUid);
@@ -186,6 +187,7 @@ const VideoCallScreen: React.FC = () => {
           {callExperienceMode === "voice" ? (
             <div className="h-full max-h-[44rem] min-h-[22rem] w-full max-w-4xl">
               <VoiceAgentStage
+                agentId={agentId}
                 agentName={agentSettings?.name || "AI Agent"}
                 agentState={agentState}
                 isAgentActive={isAgentActive}
@@ -214,6 +216,7 @@ const VideoCallScreen: React.FC = () => {
                 <div className="mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border border-cyan-300/20 shadow-2xl">
                   {avatarVideoTrack ? (
                     <AgentTile
+                      agentId={agentId}
                       agentUid={agentAvatarRtcUid || agentRtcUid}
                       agentState={agentState}
                       agentName={agentSettings?.name || "AI Agent"}
@@ -223,6 +226,7 @@ const VideoCallScreen: React.FC = () => {
                   ) : (
                     <VoiceAgentStage
                       compact
+                      agentId={agentId}
                       agentName={agentSettings?.name || "AI Agent"}
                       agentState={agentState}
                       isAgentActive

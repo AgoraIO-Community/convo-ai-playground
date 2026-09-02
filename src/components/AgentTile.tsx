@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useRef, useEffect } from "react";
+import AgentRuntimeId from "@/components/AgentRuntimeId";
 import VoiceAgentStage from "@/components/VoiceAgentStage";
 import { EAgentState } from "@/types/agora";
 import type { IRemoteVideoTrack } from "agora-rtc-sdk-ng";
 
 interface AgentTileProps {
+  agentId?: string | null;
   agentUid: string;
   agentState: EAgentState;
   agentName?: string;
@@ -18,6 +20,7 @@ interface AgentTileProps {
 }
 
 const AgentTile: React.FC<AgentTileProps> = ({
+  agentId,
   agentUid,
   agentState,
   agentName = "AI Agent",
@@ -56,6 +59,7 @@ const AgentTile: React.FC<AgentTileProps> = ({
     return (
       <VoiceAgentStage
         compact
+        agentId={agentId}
         agentName={agentName}
         agentState={agentState}
         isAgentActive
@@ -127,8 +131,12 @@ const AgentTile: React.FC<AgentTileProps> = ({
       )}
       {/* Agent Name - width fits text only (not full width), no mic icon */}
       <div className="absolute bottom-2 left-2 right-2 z-10 flex justify-start">
-        <div className="w-fit max-w-full bg-gray-900/80 dark:bg-gray-800/80 backdrop-blur-sm px-3 py-1.5 rounded-md text-sm shadow-md">
+        <div
+          className="flex w-fit max-w-full flex-col items-start gap-1 rounded-md bg-gray-900/80 px-3 py-1.5 text-sm shadow-md backdrop-blur-sm dark:bg-gray-800/80"
+          data-testid="agent-video-identity"
+        >
           <span className="font-medium truncate block">{agentName}</span>
+          <AgentRuntimeId agentId={agentId} compact />
         </div>
       </div>
     </div>

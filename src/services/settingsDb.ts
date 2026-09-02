@@ -122,6 +122,9 @@ function maskKeysForPersistence(settings: AgentSettings): AgentSettings {
   if (out.tts?.params && typeof out.tts.params === "object") {
     const p = out.tts.params as Record<string, unknown>;
     if (String(p.key ?? "").trim()) p.key = MASKED_PLACEHOLDER;
+    if (String(p.api_subscription_key ?? "").trim()) {
+      p.api_subscription_key = MASKED_PLACEHOLDER;
+    }
   }
   if (out.asr?.params && typeof out.asr.params === "object") {
     const p = out.asr.params as Record<string, unknown>;

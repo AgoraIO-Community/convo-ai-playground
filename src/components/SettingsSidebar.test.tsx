@@ -9,7 +9,10 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import useAppStore from "@/store/useAppStore";
 import { ASR_PRESETS, TTS_PRESETS, type AgentSettings } from "@/types/agora";
-import SettingsSidebar, { getDefaultSettings } from "./SettingsSidebar";
+import SettingsSidebar, {
+  getDefaultASRConfig,
+  getDefaultSettings,
+} from "./SettingsSidebar";
 
 function getOpenField(label: string): HTMLElement {
   const labelNode = screen.getByText(label, { selector: "label span" });
@@ -221,6 +224,206 @@ describe("SettingsSidebar transcript transport", () => {
         "xai",
       ]),
     );
+  });
+
+  it("builds editable Sarvam Bulbul v2 provider placeholders", () => {
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={() => undefined}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /TTS \(Text-to-Speech\)/i }),
+    );
+    chooseFromField("Vendor", "Sarvam");
+
+    const paramsField = getOpenField("Provider parameters (JSON)");
+    const paramsInput = within(paramsField).getByRole("textbox");
+    expect(JSON.parse((paramsInput as HTMLTextAreaElement).value)).toEqual({
+      model: "bulbul:v2",
+      speaker: "",
+      target_language_code: "",
+      pace: 1,
+      sample_rate: 24000,
+    });
+  });
+
+  it("stores an OpenAI ASR key in params.api_key", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /ASR \(Speech Recognition\)/i }),
+    );
+    chooseFromField("Vendor", "OpenAI Whisper (Beta)");
+    chooseFromField("Language", "Hindi (hi-IN)");
+    fireEvent.change(screen.getByLabelText("OpenAI ASR API Key"), {
+      target: { value: "sk-openai-asr" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].asr?.params).toMatchObject({
+      api_key: "sk-openai-asr",
+      input_audio_transcription: {
+        model: "gpt-4o-mini-transcribe",
+        prompt: "Transcribe the conversation accurately.",
+        language: "hi",
+      },
+    });
+  });
+
+  it("hides and preserves TTS credentials in the provider JSON editor", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+    useAppStore.getState().setAgentSettings({
+      ...getDefaultSettings(),
+      tts: {
+        credential_mode: "byok",
+        vendor: "sarvam",
+        params: {
+          key: "sarvam-secret",
+          model: "bulbul:v2",
+          speaker: "anushka",
+          target_language_code: "en-IN",
+        },
+      },
+    });
+
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /TTS \(Text-to-Speech\)/i }),
+    );
+
+    const paramsField = getOpenField("Provider parameters (JSON)");
+    const paramsValue = (
+      within(paramsField).getByRole("textbox") as HTMLTextAreaElement
+    ).value;
+    expect(paramsValue).not.toContain("sarvam-secret");
+    expect(paramsValue).not.toContain('"key"');
+
+    const paramsInput = within(paramsField).getByRole("textbox");
+    fireEvent.change(paramsInput, {
+      target: {
+        value: JSON.stringify({
+          model: "bulbul:v2",
+          speaker: "shubh",
+          target_language_code: "hi-IN",
+        }),
+      },
+    });
+    fireEvent.blur(paramsInput);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].tts.params).toMatchObject({
+      key: "sarvam-secret",
+      speaker: "shubh",
+      target_language_code: "hi-IN",
+    });
+  });
+
+  it("does not expose ASR credentials in the provider JSON editor", () => {
+    useAppStore.getState().setAgentSettings({
+      ...getDefaultSettings(),
+      asr: {
+        credential_mode: "byok",
+        vendor: "openai",
+        language: "en-US",
+        params: {
+          api_key: "openai-asr-secret",
+          input_audio_transcription: {
+            model: "gpt-4o-mini-transcribe",
+            language: "en",
+          },
+        },
+      },
+    });
+
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={() => undefined}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /ASR \(Speech Recognition\)/i }),
+    );
+
+    const paramsField = getOpenField("Provider parameters (JSON)");
+    const paramsValue = (
+      within(paramsField).getByRole("textbox") as HTMLTextAreaElement
+    ).value;
+    expect(paramsValue).not.toContain("openai-asr-secret");
+    expect(paramsValue).not.toContain('"api_key"');
+  });
+
+  it("preserves JSON credential entry for ASR vendors without a protected key field", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+    useAppStore.getState().setAgentSettings({
+      ...getDefaultSettings(),
+      asr: {
+        credential_mode: "byok",
+        vendor: "speechmatics",
+        language: "en-US",
+        params: { language: "en" },
+      },
+    });
+
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /ASR \(Speech Recognition\)/i }),
+    );
+
+    const paramsInput = within(
+      getOpenField("Provider parameters (JSON)"),
+    ).getByRole("textbox");
+    fireEvent.change(paramsInput, {
+      target: { value: JSON.stringify({ key: "speechmatics-secret" }) },
+    });
+    fireEvent.blur(paramsInput);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].asr?.params).toMatchObject({
+      key: "speechmatics-secret",
+    });
+  });
+
+  it("builds the documented OpenAI ASR defaults", () => {
+    expect(getDefaultASRConfig("openai")).toMatchObject({
+      vendor: "openai",
+      params: {
+        api_key: "",
+        input_audio_transcription: {
+          model: "gpt-4o-mini-transcribe",
+          prompt: "Transcribe the conversation accurately.",
+          language: "en",
+        },
+      },
+    });
   });
 
   it("shows only managed OpenAI models and hides LLM credentials", () => {

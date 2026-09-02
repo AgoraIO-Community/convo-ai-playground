@@ -7,6 +7,7 @@ describe("maskSensitive", () => {
       Authorization: "Basic secret",
       token: "rtc-token",
       llm: { api_key: "llm-key" },
+      tts: { params: { api_subscription_key: "sarvam-key" } },
       asr: { params: { key: "asr-key", api_key: "asr-api-key" } },
       nested: [{ password: "password", customer_secret: "customer-secret" }],
       public: "visible",
@@ -16,6 +17,7 @@ describe("maskSensitive", () => {
       Authorization: "***MASKED***",
       token: "***MASKED***",
       llm: { api_key: "***MASKED***" },
+      tts: { params: { api_subscription_key: "***MASKED***" } },
       asr: {
         params: { key: "***MASKED***", api_key: "***MASKED***" },
       },

@@ -29,7 +29,7 @@ const state = {
   channelId: "channel-private",
   localUID: "42",
   localUsername: "Ada",
-  agentId: null,
+  agentId: null as string | null,
   isAgentActive: false,
   isAgentLoading: false,
   isAgentUpdating: false,
@@ -91,6 +91,8 @@ describe("Controls", () => {
     mocks.configureRtm.mockResolvedValue(null);
     mocks.getCustomAgentSettings.mockResolvedValue(null);
     mocks.settingsSidebarProps.length = 0;
+    state.agentId = null;
+    state.isAgentActive = false;
     state.agentSettings = { advanced_features: { enable_rtm: true } };
   });
 
@@ -150,6 +152,23 @@ describe("Controls", () => {
       mocks.settingsSidebarProps[mocks.settingsSidebarProps.length - 1];
     expect(latestProps?.isOpen).toBe(true);
     expect(latestProps?.asSheet).not.toBe(true);
+  });
+
+  it("keeps the runtime agent ID out of the controls", () => {
+    state.agentId = "agent-debug-123";
+    state.isAgentActive = true;
+
+    render(
+      React.createElement(Controls, {
+        onEndCall: mocks.onEndCall,
+        experienceMode: "video",
+      }),
+    );
+
+    expect(screen.queryByText("agent-debug-123")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Copy agent ID" }),
+    ).not.toBeInTheDocument();
   });
 
   it("uses RTC data-stream delivery when RTM is disabled", async () => {

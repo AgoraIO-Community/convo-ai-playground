@@ -47,14 +47,24 @@ export function hydrateAgentProviderCredentials(
 
   const tts = asRecord(hydrated.tts);
   const ttsParams = asRecord(tts?.params);
-  if (
+  const ttsVendor = String(tts?.vendor ?? "microsoft");
+  if (tts && ttsParams && ttsVendor === "sarvam") {
+    const configuredCredential = !shouldInject(ttsParams.key)
+      ? String(ttsParams.key)
+      : !shouldInject(ttsParams.api_subscription_key)
+        ? String(ttsParams.api_subscription_key)
+        : firstValue(env.SARVAM_TTS_KEY, env.SARVAM_API_KEY);
+
+    ttsParams.api_subscription_key = configuredCredential;
+    delete ttsParams.key;
+  } else if (
     tts &&
     ttsParams &&
     tts.credential_mode !== "managed" &&
     tts.vendor !== "generic_http" &&
     shouldInject(ttsParams.key)
   ) {
-    const vendor = String(tts.vendor ?? "microsoft");
+    const vendor = ttsVendor;
     if (vendor === "elevenlabs") {
       ttsParams.key = firstValue(
         env.ELEVENLABS_API_KEY,
@@ -109,6 +119,8 @@ export function hydrateAgentProviderCredentials(
       );
     } else if (vendor === "gemini") {
       asrParams.api_key = firstValue(env.GEMINI_API_KEY);
+    } else if (vendor === "openai") {
+      asrParams.api_key = firstValue(env.OPENAI_ASR_KEY, env.OPENAI_API_KEY);
     }
   }
 

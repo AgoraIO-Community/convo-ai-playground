@@ -59,4 +59,104 @@ describe("hydrateAgentProviderCredentials", () => {
     expect(hydrated).toEqual(input);
     expect(hydrated).not.toBe(input);
   });
+
+  it("injects the dedicated OpenAI ASR key into params.api_key", () => {
+    const hydrated = hydrateAgentProviderCredentials(
+      {
+        asr: {
+          vendor: "openai",
+          credential_mode: "byok",
+          params: {
+            api_key: "",
+            input_audio_transcription: {
+              model: "gpt-4o-mini-transcribe",
+              language: "en",
+            },
+          },
+        },
+      },
+      {
+        NODE_ENV: "test",
+        OPENAI_ASR_KEY: "openai-asr-secret",
+        OPENAI_API_KEY: "shared-openai-secret",
+      },
+    );
+
+    expect(hydrated).toMatchObject({
+      asr: {
+        params: {
+          api_key: "openai-asr-secret",
+          input_audio_transcription: {
+            model: "gpt-4o-mini-transcribe",
+            language: "en",
+          },
+        },
+      },
+    });
+  });
+
+  it("falls back to the shared OpenAI key for OpenAI ASR", () => {
+    const hydrated = hydrateAgentProviderCredentials(
+      {
+        asr: {
+          vendor: "openai",
+          credential_mode: "byok",
+          params: { api_key: "" },
+        },
+      },
+      { NODE_ENV: "test", OPENAI_API_KEY: "shared-openai-secret" },
+    );
+
+    expect(hydrated).toMatchObject({
+      asr: { params: { api_key: "shared-openai-secret" } },
+    });
+  });
+
+  it("maps the protected TTS key to Sarvam's documented credential field", () => {
+    const hydrated = hydrateAgentProviderCredentials({
+      tts: {
+        vendor: "sarvam",
+        credential_mode: "byok",
+        params: {
+          key: "sarvam-secret",
+          model: "bulbul:v2",
+          speaker: "anushka",
+          target_language_code: "en-IN",
+        },
+      },
+    });
+
+    expect(hydrated).toMatchObject({
+      tts: {
+        params: {
+          api_subscription_key: "sarvam-secret",
+          model: "bulbul:v2",
+          speaker: "anushka",
+          target_language_code: "en-IN",
+        },
+      },
+    });
+    expect(
+      (hydrated.tts as { params: Record<string, unknown> }).params,
+    ).not.toHaveProperty("key");
+  });
+
+  it("prefers a newly entered Sarvam key over an imported credential", () => {
+    const hydrated = hydrateAgentProviderCredentials({
+      tts: {
+        vendor: "sarvam",
+        credential_mode: "byok",
+        params: {
+          key: "new-sarvam-secret",
+          api_subscription_key: "old-sarvam-secret",
+        },
+      },
+    });
+
+    expect(hydrated).toMatchObject({
+      tts: {
+        params: { api_subscription_key: "new-sarvam-secret" },
+      },
+    });
+  });
 });

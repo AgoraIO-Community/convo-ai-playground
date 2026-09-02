@@ -55,6 +55,7 @@ import {
 } from "@/constants/lemonSlice";
 import ElevenLabsVoicePicker from "@/components/ElevenLabsVoicePicker";
 import { ELEVENLABS_DEFAULT_VOICE_ID } from "@/constants/elevenlabsDefaults";
+import { SARVAM_BULBUL_V2_PLACEHOLDER_PARAMS } from "@/constants/sarvamTts";
 
 interface AgentSettingsSidebarProps {
   isOpen: boolean;
@@ -171,6 +172,8 @@ const getDefaultTTSParams = (vendor: TTSVendor): Record<string, unknown> => {
         sample_rate: 24000,
         encoding: "linear16",
       };
+    case "sarvam":
+      return { key: "", ...SARVAM_BULBUL_V2_PLACEHOLDER_PARAMS };
     case "microsoft":
     default:
       return {
@@ -873,6 +876,8 @@ const AgentSettingsSidebar: React.FC<AgentSettingsSidebarProps> = ({
         voice: "alloy",
         speed: 1.0,
       });
+    } else if (vendor === "sarvam") {
+      Object.assign(defaultParams, SARVAM_BULBUL_V2_PLACEHOLDER_PARAMS);
     }
 
     updateTTS({ vendor, params: defaultParams });
