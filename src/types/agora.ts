@@ -800,11 +800,17 @@ export const LLM_PRESETS: Record<LLMVendor, VendorPreset> = {
   gemini: {
     label: "Google Gemini",
     value: "gemini",
-    url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-    defaultModel: "gemini-2.0-flash",
-    models: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+    url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse",
+    defaultModel: "gemini-3.6-flash",
+    models: [
+      "gemini-3.6-flash",
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-1.5-pro",
+      "gemini-1.5-flash",
+    ],
     requiresApiKey: true,
-    style: "openai",
+    style: "gemini",
   },
   groq: {
     label: "Groq",

@@ -596,6 +596,35 @@ describe("SettingsSidebar transcript transport", () => {
     );
   });
 
+  it("saves an exact custom Google Gemini BYOK model ID", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /LLM Configuration/i }));
+    chooseFromField("Provider", "Google Gemini");
+    chooseFromField("Model", "Custom model ID");
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(screen.getByText("Enter a custom Google Gemini model ID.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Custom Google Gemini model ID"), {
+      target: { value: "gemini-2.5-flash" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].llm).toMatchObject({
+      style: "gemini",
+      url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+      params: { model: "gemini-2.5-flash" },
+    });
+  });
+
   it("shows only MiniMax and OpenAI models in managed TTS", () => {
     render(
       <SettingsSidebar

@@ -36,6 +36,35 @@ function settings(overrides: Partial<AgentSettings> = {}): AgentSettings {
 }
 
 describe("buildJoinProperties", () => {
+  it("converts system messages to the native Gemini parts format", () => {
+    const properties = buildJoinProperties({
+      settings: settings({
+        llm: {
+          credential_mode: "byok",
+          vendor: "custom",
+          url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse",
+          api_key: "gemini-secret",
+          style: "gemini",
+          system_messages: [
+            { role: "system", content: "You are a helpful assistant." },
+          ],
+          params: { model: "gemini-3.6-flash" },
+        },
+      }),
+      runtime,
+    });
+
+    expect(properties.llm).toMatchObject({
+      style: "gemini",
+      system_messages: [
+        {
+          role: "user",
+          parts: [{ text: "You are a helpful assistant." }],
+        },
+      ],
+    });
+  });
+
   it("preserves idle timeout zero and emits current parameter names", () => {
     const properties = buildJoinProperties({
       settings: settings({

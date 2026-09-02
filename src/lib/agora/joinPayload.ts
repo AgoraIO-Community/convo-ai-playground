@@ -76,12 +76,33 @@ function buildMcpServers(settings: AgentSettings): Record<string, unknown>[] {
     });
 }
 
+function normalizeGeminiSystemMessages(
+  messages: unknown,
+): unknown {
+  if (!Array.isArray(messages)) return messages;
+
+  return messages.map((message) => {
+    if (!isRecord(message)) return message;
+    if (Array.isArray(message.parts)) return message;
+    if (typeof message.content !== "string") return message;
+
+    return {
+      role: message.role === "system" ? "user" : message.role,
+      parts: [{ text: message.content }],
+    };
+  });
+}
+
 function buildLlm(settings: AgentSettings, username: string): Record<string, unknown> {
   const llm = {
     ...clone(settings.llm),
     mcp_servers: undefined,
     provider_config: undefined,
   };
+  if (llm.style === "gemini") {
+    llm.system_messages = normalizeGeminiSystemMessages(llm.system_messages) as
+      typeof llm.system_messages;
+  }
   const mcpServers = buildMcpServers(settings);
   const enableRtm = settings.advanced_features?.enable_rtm === true;
   return compact({

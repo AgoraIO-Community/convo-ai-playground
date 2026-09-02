@@ -72,6 +72,8 @@ import {
   resolveOpenAIModelValue,
 } from "@/lib/agora/openAIModels";
 
+const GEMINI_CUSTOM_MODEL_VALUE = "__custom_gemini_model__";
+
 type SettingsTab = "ai-agent" | "voice" | "mcp-server" | "telephony";
 
 interface SettingsSidebarProps {
@@ -433,6 +435,7 @@ import InfoTooltip from "@/components/common/InfoTooltip";
 import ElevenLabsVoicePicker from "@/components/ElevenLabsVoicePicker";
 import {
   buildBedrockUrl,
+  buildGeminiUrl,
   buildVertexUrl,
   DEFAULT_BEDROCK_MODEL,
   DEFAULT_BEDROCK_REGION,
@@ -2192,6 +2195,8 @@ const AgentSettingsSidebarContent: React.FC<{
   );
   const [customOpenAIModelError, setCustomOpenAIModelError] =
     React.useState<string | null>(null);
+  const [customGeminiModelError, setCustomGeminiModelError] =
+    React.useState<string | null>(null);
   const [selectedTTSVendor, setSelectedTTSVendor] = React.useState<TTSVendor>(
     getDefaultTTSVendor(),
   );
@@ -2203,6 +2208,9 @@ const AgentSettingsSidebarContent: React.FC<{
   const isOpenAIByok =
     settings.llm.credential_mode !== "managed" &&
     selectedLLMVendor === "openai";
+  const isGeminiByok =
+    settings.llm.credential_mode !== "managed" &&
+    selectedLLMVendor === "gemini";
   const isBedrockByok =
     settings.llm.credential_mode !== "managed" &&
     selectedLLMVendor === "amazon_bedrock";
@@ -2212,7 +2220,16 @@ const AgentSettingsSidebarContent: React.FC<{
   const persistedLLMModel = settings.llm.params?.model ?? "";
   const llmModelControlValue = isOpenAIByok
     ? getOpenAIModelControlValue(persistedLLMModel)
+    : isGeminiByok &&
+        !(LLM_PRESETS.gemini.models ?? []).includes(persistedLLMModel)
+      ? GEMINI_CUSTOM_MODEL_VALUE
     : persistedLLMModel;
+  const customLLMModelSelected =
+    (isOpenAIByok && llmModelControlValue === OPENAI_CUSTOM_MODEL_VALUE) ||
+    (isGeminiByok && llmModelControlValue === GEMINI_CUSTOM_MODEL_VALUE);
+  const customLLMModelError = isGeminiByok
+    ? customGeminiModelError
+    : customOpenAIModelError;
   const llmByokDraft = React.useRef<{
     config: LLMConfig;
     selectedVendor: LLMVendor;
@@ -2308,7 +2325,9 @@ const AgentSettingsSidebarContent: React.FC<{
         ...prev.llm,
         params: { ...prev.llm.params, model },
       };
-      if (selectedLLMVendor === "amazon_bedrock") {
+      if (selectedLLMVendor === "gemini") {
+        nextLlm.url = buildGeminiUrl(model);
+      } else if (selectedLLMVendor === "amazon_bedrock") {
         nextLlm.model = model;
         nextLlm.url = buildBedrockUrl(
           nextLlm.region ?? DEFAULT_BEDROCK_REGION,
@@ -2637,6 +2656,16 @@ const AgentSettingsSidebarContent: React.FC<{
         return;
       }
     }
+    if (
+      isGeminiByok &&
+      llmModelControlValue === GEMINI_CUSTOM_MODEL_VALUE &&
+      !persistedLLMModel.trim()
+    ) {
+      const message = "Enter a custom Google Gemini model ID.";
+      setCustomGeminiModelError(message);
+      showToast(message, "error");
+      return;
+    }
     const validation = validateAgentSettings(settings);
     if (!validation.valid) {
       showToast(validation.errors[0]?.message ?? "Invalid agent settings", "error");
@@ -2659,6 +2688,7 @@ const AgentSettingsSidebarContent: React.FC<{
     await onSave(settings);
   }, [
     isOpenAIByok,
+    isGeminiByok,
     llmModelControlValue,
     onSave,
     persistedLLMModel,
@@ -2815,6 +2845,9 @@ const AgentSettingsSidebarContent: React.FC<{
     ...(llmModels ?? []).map((model) => ({ value: model, label: model })),
     ...(isOpenAIByok
       ? [{ value: OPENAI_CUSTOM_MODEL_VALUE, label: "Custom model ID" }]
+      : []),
+    ...(isGeminiByok
+      ? [{ value: GEMINI_CUSTOM_MODEL_VALUE, label: "Custom model ID" }]
       : []),
   ];
   const managedTTSDefinition =
@@ -3105,39 +3138,47 @@ const AgentSettingsSidebarContent: React.FC<{
                   value={llmModelControlValue}
                   onChange={(value) => {
                     setCustomOpenAIModelError(null);
+                    setCustomGeminiModelError(null);
                     updateLLMModel(
                       value === OPENAI_CUSTOM_MODEL_VALUE
                         ? getOpenAIModelControlValue(persistedLLMModel) ===
                           OPENAI_CUSTOM_MODEL_VALUE
                           ? persistedLLMModel
                           : ""
+                        : value === GEMINI_CUSTOM_MODEL_VALUE
+                          ? llmModelControlValue === GEMINI_CUSTOM_MODEL_VALUE
+                            ? persistedLLMModel
+                            : ""
                         : value,
                     );
                   }}
                   options={llmModelOptions}
-                  error={Boolean(customOpenAIModelError)}
+                  error={Boolean(customLLMModelError)}
                 />
-                {isOpenAIByok &&
-                  llmModelControlValue === OPENAI_CUSTOM_MODEL_VALUE && (
+                {customLLMModelSelected && (
                     <div className="mt-2">
                       <Input
-                        aria-label="Custom OpenAI model ID"
+                        aria-label={
+                          isGeminiByok
+                            ? "Custom Google Gemini model ID"
+                            : "Custom OpenAI model ID"
+                        }
                         value={persistedLLMModel}
-                        error={Boolean(customOpenAIModelError)}
+                        error={Boolean(customLLMModelError)}
                         onChange={(event) => {
                           setCustomOpenAIModelError(null);
-                          updateLLM({
-                            params: {
-                              ...settings.llm.params,
-                              model: event.target.value,
-                            },
-                          });
+                          setCustomGeminiModelError(null);
+                          updateLLMModel(event.target.value);
                         }}
-                        placeholder="Enter an OpenAI model ID"
+                        placeholder={
+                          isGeminiByok
+                            ? "Enter a Google Gemini model ID"
+                            : "Enter an OpenAI model ID"
+                        }
                       />
-                      {customOpenAIModelError && (
+                      {customLLMModelError && (
                         <p className="mt-1 text-xs text-red-500" role="alert">
-                          {customOpenAIModelError}
+                          {customLLMModelError}
                         </p>
                       )}
                     </div>

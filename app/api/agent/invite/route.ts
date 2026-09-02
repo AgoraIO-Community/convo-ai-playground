@@ -65,7 +65,9 @@ function usesProviderSpecificLlmCredentials(
     llm.style === "bedrock" ||
     providerConfig?.provider === "amazon_bedrock" ||
     providerConfig?.provider === "google_vertex_ai" ||
-    String(llm.url ?? "").includes("aiplatform.googleapis.com")
+    String(llm.url ?? "").includes("aiplatform.googleapis.com") ||
+    (llm.style === "gemini" &&
+      String(llm.url ?? "").includes("generativelanguage.googleapis.com"))
   );
 }
 

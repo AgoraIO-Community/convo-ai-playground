@@ -14,6 +14,7 @@ describe("maskSensitive", () => {
       tts: { params: { api_subscription_key: "sarvam-key" } },
       asr: { params: { key: "asr-key", api_key: "asr-api-key" } },
       nested: [{ password: "password", customer_secret: "customer-secret" }],
+      url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse&key=gemini-secret",
       public: "visible",
     };
 
@@ -32,6 +33,7 @@ describe("maskSensitive", () => {
       nested: [
         { password: "***MASKED***", customer_secret: "***MASKED***" },
       ],
+      url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse&key=***MASKED***",
       public: "visible",
     });
     expect(source.llm.api_key).toBe("llm-key");

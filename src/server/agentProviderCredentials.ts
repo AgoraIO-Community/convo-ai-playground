@@ -1,4 +1,5 @@
 import { ELEVENLABS_DEFAULT_VOICE_ID } from "@/constants/elevenlabsDefaults";
+import { appendGeminiApiKey } from "@/lib/agora/llmProviderUrls";
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -19,6 +20,21 @@ function firstValue(...values: Array<string | undefined>): string {
   return values.find((value) => value?.trim())?.trim() ?? "";
 }
 
+function normalizeGeminiSystemMessages(llm: Record<string, unknown>): void {
+  if (!Array.isArray(llm.system_messages)) return;
+
+  llm.system_messages = llm.system_messages.map((message) => {
+    const record = asRecord(message);
+    if (!record || Array.isArray(record.parts)) return message;
+    if (typeof record.content !== "string") return message;
+
+    return {
+      role: record.role === "system" ? "user" : record.role,
+      parts: [{ text: record.content }],
+    };
+  });
+}
+
 export function hydrateAgentProviderCredentials(
   properties: Record<string, unknown>,
   env: NodeJS.ProcessEnv = process.env,
@@ -36,6 +52,9 @@ export function hydrateAgentProviderCredentials(
     const isVertex =
       providerConfig?.provider === "google_vertex_ai" ||
       String(llm.url ?? "").includes("aiplatform.googleapis.com");
+    const isNativeGemini =
+      llm.style === "gemini" &&
+      String(llm.url ?? "").includes("generativelanguage.googleapis.com");
 
     if (llm.credential_mode !== "managed") {
       if (shouldInject(llm.api_key)) {
@@ -43,8 +62,18 @@ export function hydrateAgentProviderCredentials(
           ? firstValue(env.BEDROCK_API_KEY, env.LLM_API_KEY)
           : isVertex
             ? firstValue(env.GOOGLE_VERTEX_ACCESS_TOKEN, env.LLM_API_KEY)
-            : firstValue(env.LLM_API_KEY, env.NEXT_PUBLIC_LLM_API_KEY);
+            : isNativeGemini
+              ? firstValue(env.GEMINI_API_KEY, env.LLM_API_KEY)
+              : firstValue(env.LLM_API_KEY, env.NEXT_PUBLIC_LLM_API_KEY);
       }
+      if (isNativeGemini && !shouldInject(llm.api_key)) {
+        llm.url = appendGeminiApiKey(
+          String(llm.url ?? ""),
+          String(llm.api_key),
+        );
+        delete llm.api_key;
+      }
+      if (isNativeGemini) normalizeGeminiSystemMessages(llm);
       if (isBedrock) {
         if (shouldInject(llm.access_key)) {
           llm.access_key = firstValue(env.BEDROCK_AWS_ACCESS_KEY_ID);

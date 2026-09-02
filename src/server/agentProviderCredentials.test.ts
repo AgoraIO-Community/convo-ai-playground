@@ -118,6 +118,36 @@ describe("hydrateAgentProviderCredentials", () => {
     expect(hydrated.llm).not.toHaveProperty("provider_config");
   });
 
+  it("places the Google Gemini API key in its native streaming URL", () => {
+    const hydrated = hydrateAgentProviderCredentials(
+      {
+        llm: {
+          credential_mode: "byok",
+          vendor: "custom",
+          style: "gemini",
+          api_key: "",
+          url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse",
+          system_messages: [
+            { role: "system", content: "You are a helpful assistant." },
+          ],
+          params: { model: "gemini-3.6-flash" },
+        },
+      },
+      { NODE_ENV: "test", GEMINI_API_KEY: "gemini-secret" },
+    );
+
+    expect(hydrated.llm).toMatchObject({
+      url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse&key=gemini-secret",
+      system_messages: [
+        {
+          role: "user",
+          parts: [{ text: "You are a helpful assistant." }],
+        },
+      ],
+    });
+    expect(hydrated.llm).not.toHaveProperty("api_key");
+  });
+
   it("injects the dedicated OpenAI ASR key into params.api_key", () => {
     const hydrated = hydrateAgentProviderCredentials(
       {
