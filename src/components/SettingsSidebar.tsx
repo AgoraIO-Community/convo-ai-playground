@@ -749,7 +749,7 @@ export const getDefaultSettings = (): AgentSettingsType => {
     name: `agent-${Date.now()}`,
     llm: {
       credential_mode: "byok",
-      vendor: "custom",
+      vendor: "openai",
       url: getEnvVar("LLM_URL", LLM_PRESETS.openai.url!),
       api_key: "",
       system_messages: [
@@ -2490,7 +2490,9 @@ const AgentSettingsSidebarContent: React.FC<{
               ? ("azure" as const)
               : vendor === "xai"
                 ? ("xai" as const)
-                : ("custom" as const),
+                : vendor === "custom"
+                  ? ("custom" as const)
+                  : undefined,
         url: preset.url || "",
         style: preset.style,
         headers: preset.headers,

@@ -55,11 +55,14 @@ export function hydrateAgentProviderCredentials(
     const isNativeGemini =
       llm.style === "gemini" &&
       String(llm.url ?? "").includes("generativelanguage.googleapis.com");
+    const isNativeAnthropic = llm.style === "anthropic";
+    const isNativeDify = llm.style === "dify";
+    const isNativeGroq = String(llm.url ?? "").includes("api.groq.com");
 
     if (llm.credential_mode !== "managed") {
       if (shouldInject(llm.api_key)) {
         llm.api_key = isBedrock
-          ? firstValue(env.BEDROCK_API_KEY, env.LLM_API_KEY)
+          ? firstValue(env.BEDROCK_API_KEY)
           : isVertex
             ? firstValue(env.GOOGLE_VERTEX_ACCESS_TOKEN, env.LLM_API_KEY)
             : isNativeGemini
@@ -73,14 +76,31 @@ export function hydrateAgentProviderCredentials(
         );
         delete llm.api_key;
       }
-      if (isNativeGemini) normalizeGeminiSystemMessages(llm);
+      if (isNativeGemini || isVertex) {
+        normalizeGeminiSystemMessages(llm);
+
+        // These fields select playground credential/UI behavior. Sending
+        // vendor="custom" opts Agora into its custom-LLM request envelope,
+        // which Google's native APIs reject because it adds metadata fields.
+        delete llm.vendor;
+        delete llm.credential_mode;
+      }
       if (isBedrock) {
-        if (shouldInject(llm.access_key)) {
-          llm.access_key = firstValue(env.BEDROCK_AWS_ACCESS_KEY_ID);
+        if (!shouldInject(llm.api_key)) {
+          delete llm.access_key;
+          delete llm.secret_key;
+        } else {
+          delete llm.api_key;
+          if (shouldInject(llm.access_key)) {
+            llm.access_key = firstValue(env.BEDROCK_AWS_ACCESS_KEY_ID);
+          }
+          if (shouldInject(llm.secret_key)) {
+            llm.secret_key = firstValue(env.BEDROCK_AWS_SECRET_ACCESS_KEY);
+          }
         }
-        if (shouldInject(llm.secret_key)) {
-          llm.secret_key = firstValue(env.BEDROCK_AWS_SECRET_ACCESS_KEY);
-        }
+
+        delete llm.vendor;
+        delete llm.credential_mode;
 
         const params = asRecord(llm.params);
         if (shouldInject(llm.model) && params?.model) {
@@ -90,6 +110,10 @@ export function hydrateAgentProviderCredentials(
           delete params.model;
           if (Object.keys(params).length === 0) delete llm.params;
         }
+      }
+      if (isNativeAnthropic || isNativeDify || isNativeGroq) {
+        delete llm.vendor;
+        delete llm.credential_mode;
       }
     }
 

@@ -280,6 +280,159 @@ describe("POST /api/agent/invite", () => {
     expect(logs).not.toContain("server-gemini-key");
   });
 
+  it("sends native Gemini without enabling custom-LLM metadata", async () => {
+    process.env.GEMINI_API_KEY = "server-gemini-key";
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ agent_id: "agent-id", status: "RUNNING" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const POST = await loadPost();
+    const current = legacySettings();
+    current.llm = {
+      credential_mode: "byok",
+      vendor: "custom",
+      url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse",
+      api_key: "",
+      style: "gemini",
+      system_messages: [
+        { role: "system", content: "You are a helpful assistant." },
+      ],
+      params: { model: "gemini-3.6-flash" },
+    };
+
+    const response = await POST(
+      request({ channelName: "channel-a", uid: "42", agentSettings: current }),
+    );
+
+    expect(response.status).toBe(200);
+    const [url, options] = fetchSpy.mock.calls[0];
+    expect(url).toBe(
+      "https://api.agora.io/api/conversational-ai-agent/v2/projects/970CA35de60c44645bbae8a215061b33/join",
+    );
+    const payload = JSON.parse(String(options?.body));
+    expect(payload.properties.llm).toMatchObject({
+      url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse&key=server-gemini-key",
+      style: "gemini",
+      system_messages: [
+        {
+          role: "user",
+          parts: [{ text: "You are a helpful assistant." }],
+        },
+      ],
+      params: { model: "gemini-3.6-flash" },
+    });
+    expect(payload.properties.llm).not.toHaveProperty("vendor");
+    expect(payload.properties.llm).not.toHaveProperty("credential_mode");
+    expect(payload.properties.llm).not.toHaveProperty("api_key");
+  });
+
+  it("sends native Vertex AI without enabling custom-LLM metadata", async () => {
+    process.env.GOOGLE_VERTEX_ACCESS_TOKEN = "vertex-access-token";
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ agent_id: "agent-id", status: "RUNNING" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const POST = await loadPost();
+    const current = legacySettings();
+    current.llm = {
+      credential_mode: "byok",
+      vendor: "custom",
+      url: "https://us-central1-aiplatform.googleapis.com/v1/projects/example-project/locations/us-central1/publishers/google/models/gemini-2.0-flash-001:streamGenerateContent?alt=sse",
+      api_key: "",
+      style: "gemini",
+      system_messages: [
+        { role: "system", content: "You are a helpful assistant." },
+      ],
+      params: { model: "gemini-2.0-flash-001" },
+      provider_config: {
+        provider: "google_vertex_ai",
+        project_id: "example-project",
+        location: "us-central1",
+      },
+    };
+
+    const response = await POST(
+      request({ channelName: "channel-a", uid: "42", agentSettings: current }),
+    );
+
+    expect(response.status).toBe(200);
+    const [url, options] = fetchSpy.mock.calls[0];
+    expect(url).toBe(
+      "https://api.agora.io/api/conversational-ai-agent/v2/projects/970CA35de60c44645bbae8a215061b33/join",
+    );
+    const payload = JSON.parse(String(options?.body));
+    expect(payload.properties.llm).toMatchObject({
+      url: "https://us-central1-aiplatform.googleapis.com/v1/projects/example-project/locations/us-central1/publishers/google/models/gemini-2.0-flash-001:streamGenerateContent?alt=sse",
+      api_key: "vertex-access-token",
+      style: "gemini",
+      system_messages: [
+        {
+          role: "user",
+          parts: [{ text: "You are a helpful assistant." }],
+        },
+      ],
+      params: { model: "gemini-2.0-flash-001" },
+    });
+    expect(payload.properties.llm).not.toHaveProperty("vendor");
+    expect(payload.properties.llm).not.toHaveProperty("credential_mode");
+    expect(payload.properties.llm).not.toHaveProperty("provider_config");
+  });
+
+  it("sends native Bedrock with exactly one authentication method", async () => {
+    process.env.BEDROCK_AWS_ACCESS_KEY_ID = "aws-access-key";
+    process.env.BEDROCK_AWS_SECRET_ACCESS_KEY = "aws-secret-key";
+    process.env.LLM_API_KEY = "unrelated-llm-key";
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ agent_id: "agent-id", status: "RUNNING" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const POST = await loadPost();
+    const current = legacySettings();
+    current.llm = {
+      credential_mode: "byok",
+      vendor: "custom",
+      url: "https://bedrock-runtime.us-east-1.amazonaws.com/model/us.anthropic.claude-sonnet-4-20250514-v1:0/converse-stream",
+      api_key: "",
+      style: "bedrock",
+      access_key: "",
+      secret_key: "",
+      region: "us-east-1",
+      model: "us.anthropic.claude-sonnet-4-20250514-v1:0",
+      system_messages: [
+        { role: "system", content: "You are a helpful assistant." },
+      ],
+      provider_config: { provider: "amazon_bedrock" },
+    };
+
+    const response = await POST(
+      request({ channelName: "channel-a", uid: "42", agentSettings: current }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = JSON.parse(String(fetchSpy.mock.calls[0][1]?.body));
+    expect(payload.properties.llm).toMatchObject({
+      url: "https://bedrock-runtime.us-east-1.amazonaws.com/model/us.anthropic.claude-sonnet-4-20250514-v1:0/converse-stream",
+      access_key: "aws-access-key",
+      secret_key: "aws-secret-key",
+      region: "us-east-1",
+      model: "us.anthropic.claude-sonnet-4-20250514-v1:0",
+      style: "bedrock",
+      system_messages: [
+        { role: "system", content: "You are a helpful assistant." },
+      ],
+    });
+    expect(payload.properties.llm).not.toHaveProperty("api_key");
+    expect(payload.properties.llm).not.toHaveProperty("vendor");
+    expect(payload.properties.llm).not.toHaveProperty("credential_mode");
+    expect(payload.properties.llm).not.toHaveProperty("provider_config");
+  });
+
   it("uses the Gemini preview join contract for custom payload mode", async () => {
     const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ agent_id: "agent-id", status: "RUNNING" }), {

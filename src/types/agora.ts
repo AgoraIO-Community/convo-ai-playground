@@ -839,7 +839,7 @@ export const LLM_PRESETS: Record<LLMVendor, VendorPreset> = {
     url: "",
     defaultModel: "",
     requiresApiKey: true,
-    style: "openai",
+    style: "dify",
   },
   minimax: {
     label: "MiniMax",

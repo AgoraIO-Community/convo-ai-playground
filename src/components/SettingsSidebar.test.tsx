@@ -65,6 +65,7 @@ describe("SettingsSidebar transcript transport", () => {
       advanced_features: { enable_rtm: false },
       parameters: { data_channel: "datastream" },
     });
+    expect(onSave.mock.calls[0][0].llm.vendor).toBe("openai");
   });
 
   it("preserves a migrated MLLM pipeline when applying settings", async () => {
@@ -254,7 +255,6 @@ describe("SettingsSidebar transcript transport", () => {
 
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
     expect(onSave.mock.calls[0][0].llm).toMatchObject({
-      vendor: "custom",
       style: "bedrock",
       access_key: "aws-access-key",
       secret_key: "aws-secret-key",
@@ -262,6 +262,7 @@ describe("SettingsSidebar transcript transport", () => {
       model: "amazon.nova-lite-v1:0",
       url: "https://bedrock-runtime.ap-south-1.amazonaws.com/model/amazon.nova-lite-v1:0/converse-stream",
     });
+    expect(onSave.mock.calls[0][0].llm.vendor).toBeUndefined();
   });
 
   it("builds the Google Vertex AI streaming URL from its settings", async () => {
@@ -289,7 +290,6 @@ describe("SettingsSidebar transcript transport", () => {
 
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
     expect(onSave.mock.calls[0][0].llm).toMatchObject({
-      vendor: "custom",
       style: "gemini",
       url: "https://europe-west4-aiplatform.googleapis.com/v1/projects/example-project/locations/europe-west4/publishers/google/models/gemini-2.0-flash-001:streamGenerateContent?alt=sse",
       params: { model: "gemini-2.0-flash-001" },
@@ -299,6 +299,7 @@ describe("SettingsSidebar transcript transport", () => {
         location: "europe-west4",
       },
     });
+    expect(onSave.mock.calls[0][0].llm.vendor).toBeUndefined();
   });
 
   it("builds editable Sarvam Bulbul v2 provider placeholders", () => {
@@ -625,6 +626,76 @@ describe("SettingsSidebar transcript transport", () => {
     });
   });
 
+  it("selects gemini-3.6-flash by default for Google Gemini", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /LLM Configuration/i }));
+    chooseFromField("Provider", "Google Gemini");
+
+    expect(getSelectButton("Model")).toHaveTextContent("gemini-3.6-flash");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].llm).toMatchObject({
+      style: "gemini",
+      url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse",
+      params: { model: "gemini-3.6-flash" },
+    });
+  });
+
+  it.each([
+    ["Anthropic Claude", "anthropic"],
+    ["Google Gemini", "gemini"],
+    ["Groq", "openai"],
+    ["Coze", "openai"],
+    ["Dify", "dify"],
+    ["MiniMax", "openai"],
+    ["Amazon Bedrock", "bedrock"],
+    ["Google Vertex AI", "gemini"],
+  ])("does not mark the native %s provider as custom", async (provider, style) => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /LLM Configuration/i }));
+    chooseFromField("Provider", provider);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].llm.vendor).toBeUndefined();
+    expect(onSave.mock.calls[0][0].llm.style).toBe(style);
+  });
+
+  it("marks only the Custom LLM selection as vendor custom", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /LLM Configuration/i }));
+    chooseFromField("Provider", "Custom (OpenAI-compatible)");
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].llm.vendor).toBe("custom");
+  });
+
   it("shows only MiniMax and OpenAI models in managed TTS", () => {
     render(
       <SettingsSidebar
@@ -822,9 +893,9 @@ describe("SettingsSidebar transcript transport", () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
     expect(onSave.mock.calls[0][0].llm).toMatchObject({
       credential_mode: "byok",
-      vendor: "custom",
       url: "https://api.groq.com/openai/v1/chat/completions",
       params: { model: "llama-3.3-70b-versatile" },
     });
+    expect(onSave.mock.calls[0][0].llm.vendor).toBeUndefined();
   });
 });
