@@ -21,6 +21,7 @@ import TelephonySettings from "./TelephonySettings";
 const mockedGetConfig = vi.mocked(getTelephonyConfig);
 const mockedGetCallStatus = vi.mocked(getOutboundCallStatus);
 const mockedStartCall = vi.mocked(startOutboundCall);
+const clipboardWrite = vi.fn<(value: string) => Promise<void>>();
 
 const agentSettings: AgentSettings = {
   name: "outbound-agent",
@@ -41,9 +42,19 @@ describe("TelephonySettings", () => {
     mockedGetCallStatus.mockReset();
     mockedStartCall.mockReset();
     window.sessionStorage.clear();
+    clipboardWrite.mockReset();
+    clipboardWrite.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: clipboardWrite },
+    });
     useAppStore.setState({ agentSettings, localUsername: "Bhupendra" });
     mockedGetConfig.mockResolvedValue({ configured: true, phoneNumberId: 851 });
-    mockedStartCall.mockResolvedValue({ callId: "call-1", status: "dialing" });
+    mockedStartCall.mockResolvedValue({
+      callId: "call-1",
+      agentSessionId: "agent-session-123",
+      status: "dialing",
+    });
     mockedGetCallStatus.mockResolvedValue({ callId: "call-1", phase: "live" });
   });
 
@@ -99,6 +110,31 @@ describe("TelephonySettings", () => {
       },
     });
     expect(await screen.findByText(/Dialing/i)).toBeInTheDocument();
+  });
+
+  it("shows and copies the call ID and agent session ID after startup", async () => {
+    mockedGetCallStatus.mockImplementation(() => new Promise(() => undefined));
+    render(<TelephonySettings />);
+    await screen.findByText(
+      (_content, element) =>
+        element?.tagName === "SPAN" &&
+        element.textContent?.includes("Phone-number ID 851") === true,
+    );
+    fireEvent.change(screen.getByLabelText("Destination phone number"), {
+      target: { value: "+918800112233" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start outbound call" }));
+
+    expect(await screen.findByText("agent-session-123")).toBeInTheDocument();
+    expect(screen.getByText("call-1")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy agent session ID" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy call ID" }));
+
+    await waitFor(() => {
+      expect(clipboardWrite).toHaveBeenNthCalledWith(1, "agent-session-123");
+      expect(clipboardWrite).toHaveBeenNthCalledWith(2, "call-1");
+    });
   });
 
   it("locks call controls while the outbound call is live", async () => {

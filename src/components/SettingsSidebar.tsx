@@ -555,19 +555,19 @@ const openAIASRLanguage = (language: string): string =>
   language.split("-")[0]?.toLowerCase() || "en";
 
 const getDefaultTTSVendor = (): TTSVendor => {
-  const vendor = getEnvVar("TTS_VENDOR", "microsoft");
+  const vendor = getEnvVar("TTS_VENDOR", "elevenlabs");
   if (vendor in TTS_PRESETS && vendor !== "fish_audio" && vendor !== "polly") {
     return vendor as TTSVendor;
   }
-  return "microsoft";
+  return "elevenlabs";
 };
 
 const getDefaultASRVendor = (): ASRVendor => {
-  const vendor = getEnvVar("ASR_VENDOR", "ares");
+  const vendor = getEnvVar("ASR_VENDOR", "deepgram");
   if (vendor in ASR_PRESETS && vendor !== "transcribe") {
     return vendor as ASRVendor;
   }
-  return "ares";
+  return "deepgram";
 };
 
 const getDefaultTTSParams = (vendor: TTSVendor): Record<string, unknown> => {

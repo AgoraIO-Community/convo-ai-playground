@@ -1,7 +1,12 @@
 "use client";
 
 import React from "react";
-import { MdCall, MdInfoOutline, MdPhoneInTalk } from "react-icons/md";
+import {
+  MdCall,
+  MdContentCopy,
+  MdInfoOutline,
+  MdPhoneInTalk,
+} from "react-icons/md";
 import {
   getOutboundCallStatus,
   getTelephonyConfig,
@@ -29,6 +34,7 @@ const POST_CALL_ARTIFACT_TIMEOUT_MS = 60000;
 
 interface ActiveOutboundCall {
   callId: string;
+  agentSessionId?: string;
   toNumber: string;
   startedAt: number;
   maxDurationSeconds: number;
@@ -79,6 +85,9 @@ const TelephonySettings: React.FC = () => {
       ) {
         const active: ActiveOutboundCall = {
           callId: restored.callId,
+          ...(typeof restored.agentSessionId === "string"
+            ? { agentSessionId: restored.agentSessionId }
+            : {}),
           toNumber: restored.toNumber,
           startedAt: restored.startedAt,
           maxDurationSeconds: restored.maxDurationSeconds,
@@ -96,7 +105,13 @@ const TelephonySettings: React.FC = () => {
         }
         artifactPollingStartedAtRef.current =
           active.artifactPollingStartedAt ?? null;
-        setCallStatus({ callId: active.callId, phase: "dialing" });
+        setCallStatus({
+          callId: active.callId,
+          phase: "dialing",
+          ...(active.agentSessionId
+            ? { agentSessionId: active.agentSessionId }
+            : {}),
+        });
         setActiveCall(active);
       } else {
         window.sessionStorage.removeItem(ACTIVE_CALL_STORAGE_KEY);
@@ -115,7 +130,16 @@ const TelephonySettings: React.FC = () => {
       try {
         const result = await getOutboundCallStatus(activeCall.callId);
         if (cancelled) return;
-        setCallStatus(result);
+        setCallStatus((current) => {
+          const agentSessionId =
+            result.agentSessionId ??
+            current?.agentSessionId ??
+            activeCall.agentSessionId;
+          return {
+            ...result,
+            ...(agentSessionId ? { agentSessionId } : {}),
+          };
+        });
         setStatusError("");
         if (result.phase === "completed" || result.phase === "failed") {
           const transcriptReady = result.transcript !== undefined;
@@ -193,6 +217,9 @@ const TelephonySettings: React.FC = () => {
       });
       const active: ActiveOutboundCall = {
         callId: result.callId,
+        ...(result.agentSessionId
+          ? { agentSessionId: result.agentSessionId }
+          : {}),
         toNumber,
         startedAt: Date.now(),
         maxDurationSeconds: options.maxDurationSeconds,
@@ -203,7 +230,13 @@ const TelephonySettings: React.FC = () => {
         ACTIVE_CALL_STORAGE_KEY,
         JSON.stringify(active),
       );
-      setCallStatus({ callId: result.callId, phase: "dialing" });
+      setCallStatus({
+        callId: result.callId,
+        phase: "dialing",
+        ...(result.agentSessionId
+          ? { agentSessionId: result.agentSessionId }
+          : {}),
+      });
       setActiveCall(active);
       showToast("Outbound call started", "success");
     } catch (error) {
@@ -346,6 +379,43 @@ const NumberField: React.FC<NumberFieldProps> = ({ label, value, min, max, disab
   </label>
 );
 
+const CallIdentifier: React.FC<{ label: string; value: string }> = ({
+  label,
+  value,
+}) => {
+  const copyLabel = `Copy ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+  const handleCopy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(value);
+      showToast(`${label} copied`, "success");
+    } catch {
+      showToast(`Unable to copy ${label.toLowerCase()}`, "error");
+    }
+  };
+
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-md bg-gray-50 px-2.5 py-2 dark:bg-gray-900/60">
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+          {label}
+        </p>
+        <code className="block truncate text-xs text-gray-800 dark:text-gray-200" title={value}>
+          {value}
+        </code>
+      </div>
+      <button
+        type="button"
+        aria-label={copyLabel}
+        title={copyLabel}
+        onClick={() => void handleCopy()}
+        className="shrink-0 rounded-md p-1.5 text-gray-500 transition hover:bg-agora-accent-blue/10 hover:text-agora-accent-blue focus:outline-none focus:ring-2 focus:ring-agora-accent-blue dark:text-gray-400"
+      >
+        <MdContentCopy aria-hidden="true" size={16} />
+      </button>
+    </div>
+  );
+};
+
 const CallStatusCard: React.FC<{ status: OutboundCallStatus }> = ({ status }) => {
   const title = {
     dialing: "Dialing",
@@ -379,7 +449,12 @@ const CallStatusCard: React.FC<{ status: OutboundCallStatus }> = ({ status }) =>
           </span>
         )}
       </div>
-      <p className="mt-1 break-all text-xs text-gray-500 dark:text-gray-400">Call ID: {status.callId}</p>
+      <div className="mt-3 space-y-2">
+        {status.agentSessionId && (
+          <CallIdentifier label="Agent session ID" value={status.agentSessionId} />
+        )}
+        <CallIdentifier label="Call ID" value={status.callId} />
+      </div>
       {status.durationSeconds !== undefined && (
         <p className="mt-1 font-medium text-gray-900 dark:text-white">{status.durationSeconds} seconds</p>
       )}
