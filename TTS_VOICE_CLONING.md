@@ -34,7 +34,7 @@ The list below follows the 18 TTS integrations currently listed in the [Agora TT
 | Amazon Polly | Assisted | AWS creates a private Brand Voice through a managed engagement; customers cannot create it themselves. | `params.voice_id` | Accept an already-provisioned Brand Voice ID only. No record/upload flow. |
 | Cartesia | Direct | `POST https://api.cartesia.ai/voices/clone` with a multipart audio `clip`; response contains a voice `id`. | `params.voice = { "mode": "id", "id": "<id>" }` | Phase 1 candidate. |
 | Deepgram | Not public | Current public Aura TTS docs expose preset voice models; no self-service cloning endpoint was found. | TTS model name | Do not show **Clone a voice**. |
-| ElevenLabs | Direct | `POST /v1/voices/add` with multipart `files` and `name`; response contains `voice_id`. | `params.voice_id` | Phase 1 candidate. Support Instant Voice Cloning first. |
+| ElevenLabs | Direct | `POST /v1/voices/add` with multipart `files` and `name`; response contains `voice_id`. | `params.voice_id` | **Implemented for BYOK.** Record or upload a sample and apply the returned ID immediately. |
 | Fish Audio | Direct | Create a model through Fish Audio's `/model` endpoint using reference audio; response provides the model/reference ID. | `params.reference_id` | Phase 1 candidate. |
 | Generic TTS | Depends | The configured HTTP endpoint owns the cloning API and identifier format. | Defined by the endpoint request template | Offer an advanced custom adapter, not a built-in clone flow. |
 | Google Cloud TTS | Usable with caveat | Instant Custom Voice generates a `voice_cloning_key` from reference and consent audio. Access and regions are restricted. | Current Agora docs validate `params.VoiceSelectionParams.name`; a cloning-key shape is not documented. | Test via Generic TTS or obtain Agora adapter confirmation before enabling. |
@@ -53,10 +53,33 @@ The list below follows the 18 TTS integrations currently listed in the [Agora TT
 ## Recommended rollout
 
 1. **MiniMax BYOK**: implement and validate the complete workflow.
-2. **ElevenLabs, Cartesia, Fish Audio, Typecast**: add direct creation adapters because their returned identifiers map cleanly into Agora's documented TTS configuration.
-3. **Gradium and Hume AI**: enable after confirming the creation entitlement and running one Agora `/join` test with the cloned ID.
-4. **Google, Azure, Mistral, OpenAI, Sarvam, xAI**: keep behind an experimental/eligibility label until the vendor entitlement and Agora adapter shape are verified.
-5. **Amazon Polly, Murf, Rime**: provide an **Import existing voice ID** field because cloning is vendor-assisted.
+2. **ElevenLabs BYOK**: implemented with Instant Voice Cloning; validate the returned voice in an Agora agent call.
+3. **Cartesia, Fish Audio, Typecast**: add direct creation adapters because their returned identifiers map cleanly into Agora's documented TTS configuration.
+4. **Gradium and Hume AI**: enable after confirming the creation entitlement and running one Agora `/join` test with the cloned ID.
+5. **Google, Azure, Mistral, OpenAI, Sarvam, xAI**: keep behind an experimental/eligibility label until the vendor entitlement and Agora adapter shape are verified.
+6. **Amazon Polly, Murf, Rime**: provide an **Import existing voice ID** field because cloning is vendor-assisted.
+
+## ElevenLabs implementation
+
+Select **ElevenLabs**, keep credential mode on **BYOK**, and use the Instant
+Voice Cloning panel below the voice selector. The Playground accepts an upload
+or browser recording, requires consent, and calls the authenticated server
+route `POST /api/tts/elevenlabs/voice-clone`. That route sends multipart form
+data to `POST https://api.elevenlabs.io/v1/voices/add` and returns the new
+`voice_id`. It then synthesizes the editable preview sentence with the new
+voice and displays the returned MP3 inline. Preview synthesis consumes a small
+number of ElevenLabs credits.
+
+The clone route uses the key entered in the current TTS settings when present,
+otherwise it uses the server-side `ELEVENLABS_API_KEY`. The resulting ID is
+selected as `tts.params.voice_id`, so Agora uses the same ElevenLabs account and
+clone for synthesis. Instant cloning returns synchronously and does not require
+polling. If preview synthesis fails, the successful clone and selected
+`tts.params.voice_id` are preserved and the Playground shows a warning.
+
+For best results, provide approximately 1–2 minutes of clean, consistent,
+single-speaker audio. Background-noise removal is optional and should remain off
+for already-clean recordings.
 
 ## MiniMax implementation specification
 

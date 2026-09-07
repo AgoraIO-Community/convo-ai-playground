@@ -862,6 +862,67 @@ describe("SettingsSidebar transcript transport", () => {
     });
   });
 
+  it("exposes instant voice cloning for ElevenLabs BYOK TTS", () => {
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={() => undefined}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /TTS \(Text-to-Speech\)/i }),
+    );
+
+    expect(screen.getByText("ElevenLabs Instant Voice Cloning")).toBeInTheDocument();
+    expect(screen.getByLabelText("Voice name")).toBeInTheDocument();
+  });
+
+  it("refreshes provider JSON when an ElevenLabs clone selects a new voice ID", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      Response.json({
+        voiceId: "voice_clone_from_sidebar",
+        requiresVerification: false,
+        previewUrl: "data:audio/mpeg;base64,SUQz",
+      }),
+    );
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={() => undefined}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /TTS \(Text-to-Speech\)/i }),
+    );
+    fireEvent.change(screen.getByLabelText("Voice name"), {
+      target: { value: "Sidebar Clone" },
+    });
+    fireEvent.change(screen.getByLabelText("Voice sample"), {
+      target: {
+        files: [
+          new File([new Uint8Array([73, 68, 51])], "voice.mp3", {
+            type: "audio/mpeg",
+          }),
+        ],
+      },
+    });
+    fireEvent.click(screen.getByRole("checkbox", { name: /permission/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Clone voice" }));
+
+    await waitFor(() => {
+      const paramsInput = within(
+        getOpenField("Provider parameters (JSON)"),
+      ).getByRole("textbox") as HTMLTextAreaElement;
+      expect(JSON.parse(paramsInput.value)).toMatchObject({
+        voice_id: "voice_clone_from_sidebar",
+      });
+    });
+  });
+
   it("shows only Deepgram Nova models in managed ASR", () => {
     render(
       <SettingsSidebar

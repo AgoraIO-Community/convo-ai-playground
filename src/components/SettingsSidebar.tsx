@@ -435,6 +435,9 @@ import {
 } from "@/types/agora";
 import InfoTooltip from "@/components/common/InfoTooltip";
 import ElevenLabsVoicePicker from "@/components/ElevenLabsVoicePicker";
+import ElevenLabsVoiceCloner, {
+  type ElevenLabsClonedVoice,
+} from "@/components/ElevenLabsVoiceCloner";
 import MiniMaxVoiceCloner from "@/components/MiniMaxVoiceCloner";
 import {
   buildBedrockUrl,
@@ -2157,6 +2160,8 @@ const AgentSettingsSidebarContent: React.FC<{
   const [turnsLoading, setTurnsLoading] = React.useState(false);
   const [turnsError, setTurnsError] = React.useState<string | null>(null);
   const [showRawTurnsJson, setShowRawTurnsJson] = React.useState(false);
+  const [latestElevenLabsClone, setLatestElevenLabsClone] =
+    React.useState<ElevenLabsClonedVoice | null>(null);
 
   const handleLoadTurnMetrics = React.useCallback(
     async (overrideAgentId?: string) => {
@@ -3972,8 +3977,17 @@ const AgentSettingsSidebarContent: React.FC<{
                     getTTSParam("voice_id") || ELEVENLABS_DEFAULT_VOICE_ID
                   }
                   onChange={(id) => setTTSParam("voice_id", id)}
+                  addedVoice={latestElevenLabsClone}
                 />
               </FormField>
+              <ElevenLabsVoiceCloner
+                apiKey={getTTSParam("key")}
+                model={getTTSParam("model_id") || "eleven_flash_v2_5"}
+                onVoiceCloned={(voice) => {
+                  setLatestElevenLabsClone(voice);
+                  setTTSParam("voice_id", voice.voiceId);
+                }}
+              />
               <div className="grid grid-cols-2 gap-4">
                 <FormField label="Speed" hint="0.7-1.2">
                   <Input
@@ -4073,7 +4087,11 @@ const AgentSettingsSidebarContent: React.FC<{
               hint="Vendor-specific v2.11 parameters. Dedicated fields above update this same object."
             >
               <Textarea
-                key={`tts-params-${selectedTTSVendor}`}
+                key={`tts-params-${selectedTTSVendor}-${JSON.stringify(
+                  providerParamsForEditor(
+                    settings.tts.params as Record<string, unknown>,
+                  ),
+                )}`}
                 rows={5}
                 defaultValue={JSON.stringify(
                   providerParamsForEditor(

@@ -6,6 +6,10 @@ import { ELEVENLABS_DEFAULT_VOICE_ID } from "@/constants/elevenlabsDefaults";
 interface ElevenLabsVoicePickerProps {
   value: string;
   onChange: (voiceId: string) => void;
+  addedVoice?: {
+    voiceId: string;
+    name: string;
+  } | null;
 }
 
 interface CuratedVoice {
@@ -126,9 +130,16 @@ const VoiceCard: React.FC<{
   onSelect: () => void;
   onPreview: (e: React.MouseEvent) => void;
 }> = ({ voice, selected, playing, onSelect, onPreview }) => (
-  <button
-    type="button"
+  <div
+    role="button"
+    tabIndex={0}
     onClick={onSelect}
+    onKeyDown={(event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        onSelect();
+      }
+    }}
     className={[
       "w-full flex items-center gap-3 px-3 py-3 text-left transition-all duration-150 group",
       selected
@@ -194,7 +205,7 @@ const VoiceCard: React.FC<{
         </svg>
       )}
     </button>
-  </button>
+  </div>
 );
 
 // ─── Main Component ─────────────────────────────────────────────────────────
@@ -202,6 +213,7 @@ const VoiceCard: React.FC<{
 const ElevenLabsVoicePicker: React.FC<ElevenLabsVoicePickerProps> = ({
   value,
   onChange,
+  addedVoice,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -209,6 +221,9 @@ const ElevenLabsVoicePicker: React.FC<ElevenLabsVoicePickerProps> = ({
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const selectedVoice = VOICE_MAP.get(value);
+  const selectedVoiceName =
+    selectedVoice?.name ??
+    (addedVoice?.voiceId === value ? addedVoice.name : "Custom Voice");
 
   const handlePreview = useCallback(
     (e: React.MouseEvent, voice: CuratedVoice) => {
@@ -281,7 +296,7 @@ const ElevenLabsVoicePicker: React.FC<ElevenLabsVoicePickerProps> = ({
             {value ? (
               <>
                 <div className="text-sm font-medium text-gray-200 truncate">
-                  {selectedVoice?.name ?? "Custom Voice"}
+                  {selectedVoiceName}
                 </div>
                 <div className="text-[10px] text-gray-600 font-mono truncate">
                   {value}
@@ -331,6 +346,33 @@ const ElevenLabsVoicePicker: React.FC<ElevenLabsVoicePickerProps> = ({
                   onPreview={(e) => handlePreview(e, voice)}
                 />
               ))}
+              {addedVoice && !VOICE_MAP.has(addedVoice.voiceId) ? (
+                <button
+                  type="button"
+                  onClick={() => handleSelect(addedVoice.voiceId)}
+                  className={[
+                    "flex w-full items-center gap-3 border-l-2 px-3 py-3 text-left transition-all duration-150",
+                    addedVoice.voiceId === value
+                      ? "border-amber-500 bg-amber-500/10"
+                      : "border-transparent hover:bg-white/[0.04]",
+                  ].join(" ")}
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-sm font-bold text-amber-400 ring-1 ring-amber-500/40">
+                    {addedVoice.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-semibold text-amber-300">
+                      {addedVoice.name}
+                    </div>
+                    <div className="truncate font-mono text-[10px] text-gray-600">
+                      {addedVoice.voiceId}
+                    </div>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wide text-gray-500">
+                    Cloned
+                  </span>
+                </button>
+              ) : null}
             </div>
 
             {/* Custom ID fallback */}
