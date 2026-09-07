@@ -73,6 +73,8 @@ import {
 } from "@/lib/agora/openAIModels";
 
 const GEMINI_CUSTOM_MODEL_VALUE = "__custom_gemini_model__";
+const MINIMAX_TTS_URL = "wss://api-uw.minimax.io/ws/v1/t2a_v2";
+const MINIMAX_DEFAULT_MODEL = "speech-2.8-turbo";
 
 type SettingsTab = "ai-agent" | "voice" | "mcp-server" | "telephony";
 
@@ -433,6 +435,7 @@ import {
 } from "@/types/agora";
 import InfoTooltip from "@/components/common/InfoTooltip";
 import ElevenLabsVoicePicker from "@/components/ElevenLabsVoicePicker";
+import MiniMaxVoiceCloner from "@/components/MiniMaxVoiceCloner";
 import {
   buildBedrockUrl,
   buildGeminiUrl,
@@ -589,6 +592,15 @@ const getDefaultTTSParams = (vendor: TTSVendor): Record<string, unknown> => {
         model: getEnvVar("OPENAI_TTS_MODEL", "tts-1"),
         voice: getEnvVar("OPENAI_TTS_VOICE", "alloy"),
         speed: 1.0,
+      };
+    case "minimax":
+      return {
+        key: "",
+        group_id: "",
+        model: MINIMAX_DEFAULT_MODEL,
+        url: MINIMAX_TTS_URL,
+        voice_setting: { voice_id: "", speed: 1 },
+        audio_setting: { sample_rate: 44100 },
       };
     case "generic_http":
       return {};
@@ -2575,6 +2587,14 @@ const AgentSettingsSidebarContent: React.FC<{
         voice: "alloy",
         speed: 1.0,
       });
+    } else if (vendor === "minimax") {
+      Object.assign(defaultParams, {
+        group_id: "",
+        model: MINIMAX_DEFAULT_MODEL,
+        url: MINIMAX_TTS_URL,
+        voice_setting: { voice_id: "", speed: 1 },
+        audio_setting: { sample_rate: 44100 },
+      });
     } else if (vendor === "sarvam") {
       Object.assign(defaultParams, SARVAM_BULBUL_V2_PLACEHOLDER_PARAMS);
     } else if (vendor === "generic_http") {
@@ -2779,6 +2799,36 @@ const AgentSettingsSidebarContent: React.FC<{
           },
         },
       };
+    });
+  };
+
+  const getMiniMaxVoiceSetting = (): Record<string, unknown> => {
+    const params = settings.tts.params as Record<string, unknown>;
+    const value = params.voice_setting;
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  };
+
+  const getMiniMaxAudioSetting = (): Record<string, unknown> => {
+    const params = settings.tts.params as Record<string, unknown>;
+    const value = params.audio_setting;
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  };
+
+  const setMiniMaxVoiceSetting = (updates: Record<string, unknown>) => {
+    setTTSParam("voice_setting", {
+      ...getMiniMaxVoiceSetting(),
+      ...updates,
+    });
+  };
+
+  const setMiniMaxAudioSetting = (updates: Record<string, unknown>) => {
+    setTTSParam("audio_setting", {
+      ...getMiniMaxAudioSetting(),
+      ...updates,
     });
   };
 
@@ -3749,6 +3799,95 @@ const AgentSettingsSidebarContent: React.FC<{
                 </a>
                 .
               </p>
+            </>
+          )}
+
+          {!ttsManaged && selectedTTSVendor === "minimax" && (
+            <>
+              <FormField
+                label="MiniMax group ID"
+                required
+                hint="Leave empty to use the server-side MINIMAX_GROUP_ID."
+              >
+                <Input
+                  aria-label="MiniMax group ID"
+                  value={getTTSParam("group_id")}
+                  onChange={(event) =>
+                    setTTSParam("group_id", event.target.value)
+                  }
+                  placeholder="Your MiniMax group ID"
+                />
+              </FormField>
+              <FormField label="Model" required>
+                <Input
+                  aria-label="MiniMax model"
+                  value={getTTSParam("model") || MINIMAX_DEFAULT_MODEL}
+                  onChange={(event) => setTTSParam("model", event.target.value)}
+                  placeholder={MINIMAX_DEFAULT_MODEL}
+                />
+              </FormField>
+              <FormField
+                label="Voice ID"
+                required
+                hint="Use an existing MiniMax voice ID or create one below."
+              >
+                <Input
+                  aria-label="MiniMax voice ID"
+                  value={String(getMiniMaxVoiceSetting().voice_id ?? "")}
+                  onChange={(event) =>
+                    setMiniMaxVoiceSetting({ voice_id: event.target.value })
+                  }
+                  placeholder="English_captivating_female1"
+                />
+              </FormField>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Speed" hint="MiniMax voice speed">
+                  <Input
+                    aria-label="MiniMax voice speed"
+                    type="number"
+                    min={0.5}
+                    max={2}
+                    step={0.1}
+                    value={String(getMiniMaxVoiceSetting().speed ?? 1)}
+                    onChange={(event) =>
+                      setMiniMaxVoiceSetting({
+                        speed: Number(event.target.value),
+                      })
+                    }
+                  />
+                </FormField>
+                <FormField label="Sample rate" hint="Hz">
+                  <Input
+                    aria-label="MiniMax sample rate"
+                    type="number"
+                    min={8000}
+                    max={44100}
+                    step={1000}
+                    value={String(
+                      getMiniMaxAudioSetting().sample_rate ?? 44100,
+                    )}
+                    onChange={(event) =>
+                      setMiniMaxAudioSetting({
+                        sample_rate: Number(event.target.value),
+                      })
+                    }
+                  />
+                </FormField>
+              </div>
+              <FormField label="Streaming URL" required>
+                <Input
+                  aria-label="MiniMax streaming URL"
+                  value={getTTSParam("url") || MINIMAX_TTS_URL}
+                  onChange={(event) => setTTSParam("url", event.target.value)}
+                />
+              </FormField>
+              <MiniMaxVoiceCloner
+                model={getTTSParam("model") || MINIMAX_DEFAULT_MODEL}
+                voiceId={String(getMiniMaxVoiceSetting().voice_id ?? "")}
+                onVoiceCloned={(voiceId) =>
+                  setMiniMaxVoiceSetting({ voice_id: voiceId })
+                }
+              />
             </>
           )}
 

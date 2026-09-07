@@ -47,6 +47,37 @@ describe("hydrateAgentProviderCredentials", () => {
     ).toEqual(input);
   });
 
+  it("injects the MiniMax API key and group ID into BYOK TTS", () => {
+    const hydrated = hydrateAgentProviderCredentials(
+      {
+        tts: {
+          vendor: "minimax",
+          credential_mode: "byok",
+          params: {
+            key: "",
+            group_id: "",
+            model: "speech-2.8-turbo",
+            voice_setting: { voice_id: "MyVoice01" },
+          },
+        },
+      },
+      {
+        MINIMAX_API_KEY: "minimax-server-key",
+        MINIMAX_GROUP_ID: "minimax-group-id",
+      },
+    );
+
+    expect(hydrated).toMatchObject({
+      tts: {
+        params: {
+          key: "minimax-server-key",
+          group_id: "minimax-group-id",
+          voice_setting: { voice_id: "MyVoice01" },
+        },
+      },
+    });
+  });
+
   it("preserves explicit user credentials and does not mutate input", () => {
     const input = {
       llm: { vendor: "openai", api_key: "user-key" },

@@ -144,6 +144,18 @@ export function hydrateAgentProviderCredentials(
   } else if (
     tts &&
     ttsParams &&
+    ttsVendor === "minimax" &&
+    tts.credential_mode !== "managed"
+  ) {
+    if (shouldInject(ttsParams.key)) {
+      ttsParams.key = firstValue(env.MINIMAX_API_KEY);
+    }
+    if (shouldInject(ttsParams.group_id)) {
+      ttsParams.group_id = firstValue(env.MINIMAX_GROUP_ID);
+    }
+  } else if (
+    tts &&
+    ttsParams &&
     tts.credential_mode !== "managed" &&
     tts.vendor !== "generic_http" &&
     shouldInject(ttsParams.key)

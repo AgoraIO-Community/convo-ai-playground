@@ -820,6 +820,48 @@ describe("SettingsSidebar transcript transport", () => {
     );
   });
 
+  it("configures MiniMax BYOK TTS and exposes voice cloning", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /TTS \(Text-to-Speech\)/i }),
+    );
+    chooseFromField("Vendor", "MiniMax");
+
+    expect(screen.getByText("Clone a voice")).toBeInTheDocument();
+    expect(screen.getByLabelText("MiniMax group ID")).toBeInTheDocument();
+    expect(screen.getByLabelText("MiniMax model")).toHaveValue(
+      "speech-2.8-turbo",
+    );
+    fireEvent.change(screen.getByLabelText("MiniMax group ID"), {
+      target: { value: "group-123" },
+    });
+    fireEvent.change(screen.getByLabelText("MiniMax voice ID"), {
+      target: { value: "MyVoice01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].tts).toMatchObject({
+      credential_mode: "byok",
+      vendor: "minimax",
+      params: {
+        group_id: "group-123",
+        model: "speech-2.8-turbo",
+        url: "wss://api-uw.minimax.io/ws/v1/t2a_v2",
+        voice_setting: { voice_id: "MyVoice01", speed: 1 },
+        audio_setting: { sample_rate: 44100 },
+      },
+    });
+  });
+
   it("shows only Deepgram Nova models in managed ASR", () => {
     render(
       <SettingsSidebar
