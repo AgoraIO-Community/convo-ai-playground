@@ -672,6 +672,30 @@ describe("SettingsSidebar transcript transport", () => {
     });
   });
 
+  it("selects claude-sonnet-4-6 by default for Anthropic Claude", async () => {
+    const onSave = vi.fn<(settings: AgentSettings) => void>();
+    render(
+      <SettingsSidebar
+        isOpen
+        onClose={() => undefined}
+        onSaveAgentSettings={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /LLM Configuration/i }));
+    chooseFromField("Provider", "Anthropic Claude");
+
+    expect(getSelectButton("Model")).toHaveTextContent("claude-sonnet-4-6");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].llm).toMatchObject({
+      style: "anthropic",
+      url: "https://api.anthropic.com/v1/messages",
+      params: { model: "claude-sonnet-4-6" },
+    });
+  });
+
   it.each([
     ["Anthropic Claude", "anthropic"],
     ["Google Gemini", "gemini"],

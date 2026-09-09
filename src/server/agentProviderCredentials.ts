@@ -85,6 +85,13 @@ export function hydrateAgentProviderCredentials(
         delete llm.vendor;
         delete llm.credential_mode;
       }
+      if (isNativeAnthropic) {
+        const params = asRecord(llm.params) ?? {};
+        if (params.max_tokens == null) {
+          params.max_tokens = 1024;
+        }
+        llm.params = params;
+      }
       if (isBedrock) {
         if (!shouldInject(llm.api_key)) {
           delete llm.access_key;

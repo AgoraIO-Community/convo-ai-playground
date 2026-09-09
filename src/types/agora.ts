@@ -787,8 +787,9 @@ export const LLM_PRESETS: Record<LLMVendor, VendorPreset> = {
     label: "Anthropic Claude",
     value: "anthropic",
     url: "https://api.anthropic.com/v1/messages",
-    defaultModel: "claude-3-5-sonnet-latest",
+    defaultModel: "claude-sonnet-4-6",
     models: [
+      "claude-sonnet-4-6",
       "claude-3-5-sonnet-latest",
       "claude-3-5-haiku-latest",
       "claude-3-opus-latest",

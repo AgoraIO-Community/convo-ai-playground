@@ -47,6 +47,28 @@ describe("hydrateAgentProviderCredentials", () => {
     ).toEqual(input);
   });
 
+  it("adds Anthropic's required max_tokens parameter when it is missing", () => {
+    const hydrated = hydrateAgentProviderCredentials({
+      llm: {
+        credential_mode: "byok",
+        style: "anthropic",
+        url: "https://api.anthropic.com/v1/messages",
+        api_key: "anthropic-key",
+        params: { model: "claude-3-5-sonnet-latest" },
+      },
+    });
+
+    expect(hydrated).toMatchObject({
+      llm: {
+        style: "anthropic",
+        params: {
+          model: "claude-3-5-sonnet-latest",
+          max_tokens: 1024,
+        },
+      },
+    });
+  });
+
   it("injects the MiniMax API key and group ID into BYOK TTS", () => {
     const hydrated = hydrateAgentProviderCredentials(
       {
