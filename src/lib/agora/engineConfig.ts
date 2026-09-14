@@ -5,7 +5,7 @@ import type {
   MllmTurnDetection,
 } from "@/types/agora";
 
-export const ENGINE_SETTINGS_SCHEMA_VERSION = 211 as const;
+export const ENGINE_SETTINGS_SCHEMA_VERSION = 213 as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

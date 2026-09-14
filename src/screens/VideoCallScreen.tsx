@@ -2,19 +2,25 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MdChat, MdTimer } from "react-icons/md";
+import { MdTimer } from "react-icons/md";
 import AgentTile from "@/components/AgentTile";
-import BottomSheet from "@/components/common/BottomSheet";
 import CallExperienceModeSwitch from "@/components/CallExperienceModeSwitch";
 import Controls from "@/components/Controls";
+import TeacherStage from "@/components/teacher/TeacherStage";
+import TranscriptDrawer from "@/components/TranscriptDrawer";
 import TranscriptSidePanel from "@/components/TranscriptSidePanel";
 import VideoTile from "@/components/VideoTile";
 import VoiceAgentStage from "@/components/VoiceAgentStage";
 import { useAgora } from "@/hooks/useAgora";
 import { useConversationalAI } from "@/hooks/useConversationalAI";
+import { useTeacherBoardSession } from "@/hooks/useTeacherBoardSession";
+import { useTeacherLessonDirector } from "@/hooks/useTeacherLessonDirector";
 import { showToast } from "@/services/uiService";
 import useAppStore from "@/store/useAppStore";
-import type { CallExperienceMode } from "@/types/callExperience";
+import type {
+  CallExperienceMode,
+  StandardCallExperienceMode,
+} from "@/types/callExperience";
 
 const SESSION_DURATION_MS = 15 * 60 * 1000;
 
@@ -38,15 +44,19 @@ const VideoCallScreen: React.FC = () => {
   const agentRtcUid = useAppStore((state) => state.agentRtcUid);
   const agentAvatarRtcUid = useAppStore((state) => state.agentAvatarRtcUid);
   const agentSettings = useAppStore((state) => state.agentSettings);
+  const transcriptItems = useAppStore((state) => state.transcriptItems);
+  const addUserSentMessage = useAppStore((state) => state.addUserSentMessage);
   const transcriptionMode = useAppStore((state) => state.transcriptionMode);
   const sessionStartTime = useAppStore((state) => state.sessionStartTime);
   const [remainingMs, setRemainingMs] = useState(SESSION_DURATION_MS);
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const initialVideoMutedRef = useRef(videoMuted);
   const [callExperienceMode, setCallExperienceMode] =
-    useState<CallExperienceMode>(
-      initialVideoMutedRef.current ? "voice" : "video",
-    );
+    useState<CallExperienceMode>("teacher");
+  const previousNonTeacherModeRef = useRef<StandardCallExperienceMode>(
+    initialVideoMutedRef.current ? "voice" : "video",
+  );
+  const didApplyTeacherDefaultRef = useRef(false);
   const [isModeChanging, setIsModeChanging] = useState(false);
   const isEndingRef = useRef(false);
 
@@ -58,6 +68,15 @@ const VideoCallScreen: React.FC = () => {
     rtcClient,
     rtmClient,
   } = useAgora();
+
+  useEffect(() => {
+    if (didApplyTeacherDefaultRef.current) return;
+    didApplyTeacherDefaultRef.current = true;
+    void setLocalVideoEnabled(false).catch(() => {
+      showToast("Camera could not be disabled for Teacher Mode.", "error");
+    });
+  }, [setLocalVideoEnabled]);
+
   const { sendChatMessage, manualSOS, manualEOS } = useConversationalAI({
     rtcClient,
     rtmClient,
@@ -66,12 +85,53 @@ const VideoCallScreen: React.FC = () => {
     transcriptionMode,
     agentRtcUid,
   });
+  const teacher = useTeacherBoardSession(agentState);
+  const pauseTeacherDemo = teacher.pauseDemo;
+  const lessonDirector = useTeacherLessonDirector({
+    active: callExperienceMode === "teacher" && isAgentActive,
+    agentId,
+    agentState,
+    localUID,
+    transcriptItems,
+    teacherSession: teacher.session,
+    boardState: teacher.boardState,
+    clearBoard: teacher.clearBoard,
+  });
+
+  const handleTeacherMessage = useCallback(
+    async (text: string, image?: File): Promise<void> => {
+      const question = text.trim();
+      if (image) {
+        showToast(
+          "Teacher Mode currently accepts text or spoken questions, not image attachments.",
+          "info",
+        );
+        return;
+      }
+      if (!question) return;
+      if (!isAgentActive || !agentId || !teacher.session) {
+        showToast("Start the agent and wait for the teacher board to be ready.", "warning");
+        return;
+      }
+      teacher.pauseDemo();
+      addUserSentMessage({ text: question });
+      await lessonDirector.sendTeacherQuestion(question);
+    },
+    [
+      addUserSentMessage,
+      agentId,
+      isAgentActive,
+      lessonDirector,
+      teacher,
+    ],
+  );
 
   const endCall = useCallback(
     async (reason: "ended" | "expired"): Promise<void> => {
       if (isEndingRef.current) return;
       isEndingRef.current = true;
       try {
+        teacher.pauseDemo();
         await leaveCall();
         router.replace(`/call-ended?reason=${reason}`);
       } catch (error) {
@@ -79,7 +139,7 @@ const VideoCallScreen: React.FC = () => {
         throw error;
       }
     },
-    [leaveCall, router],
+    [leaveCall, router, teacher],
   );
 
   const handleEndCall = useCallback(
@@ -88,24 +148,87 @@ const VideoCallScreen: React.FC = () => {
   );
 
   const handleExperienceModeChange = useCallback(
-    async (nextMode: CallExperienceMode): Promise<void> => {
+    async (nextMode: StandardCallExperienceMode): Promise<void> => {
       if (nextMode === callExperienceMode || isModeChanging) return;
+      if (isAgentActive) {
+        showToast("Stop the agent before switching call modes.", "info");
+        return;
+      }
       setIsModeChanging(true);
       try {
         await setLocalVideoEnabled(nextMode === "video");
+        previousNonTeacherModeRef.current = nextMode;
+        if (callExperienceMode === "teacher") teacher.pauseDemo();
         setCallExperienceMode(nextMode);
       } catch {
-        showToast(
-          nextMode === "video"
-            ? "Unable to start the camera. Check browser permission and device availability."
-            : "Unable to switch to voice mode.",
-          "error",
-        );
+        if (nextMode === "video") {
+          await setLocalVideoEnabled(false).catch(() => undefined);
+          previousNonTeacherModeRef.current = "voice";
+          teacher.pauseDemo();
+          setCallExperienceMode("voice");
+          showToast(
+            "Camera unavailable, so the call returned to Voice Agent mode.",
+            "error",
+          );
+        } else {
+          showToast("Unable to switch to voice mode.", "error");
+        }
       } finally {
         setIsModeChanging(false);
       }
-    }, [callExperienceMode, isModeChanging, setLocalVideoEnabled],
+    }, [
+      callExperienceMode,
+      isAgentActive,
+      isModeChanging,
+      setLocalVideoEnabled,
+      teacher,
+    ],
   );
+
+  const handleTeacherModeToggle = useCallback(async (): Promise<void> => {
+    if (isModeChanging) return;
+    if (isAgentActive) {
+      showToast("Stop the agent before switching Teacher Mode.", "info");
+      return;
+    }
+    setIsModeChanging(true);
+    try {
+      if (callExperienceMode !== "teacher") {
+        previousNonTeacherModeRef.current = callExperienceMode;
+        await setLocalVideoEnabled(false);
+        setCallExperienceMode("teacher");
+        return;
+      }
+
+      teacher.pauseDemo();
+      const restoreMode = previousNonTeacherModeRef.current;
+      if (restoreMode === "video") {
+        try {
+          await setLocalVideoEnabled(true);
+          setCallExperienceMode("video");
+        } catch {
+          await setLocalVideoEnabled(false).catch(() => undefined);
+          previousNonTeacherModeRef.current = "voice";
+          setCallExperienceMode("voice");
+          showToast(
+            "Camera unavailable, so Teacher Mode returned to Voice Agent mode.",
+            "error",
+          );
+        }
+      } else {
+        await setLocalVideoEnabled(false);
+        setCallExperienceMode("voice");
+      }
+    } finally {
+      setIsModeChanging(false);
+    }
+  }, [
+    callExperienceMode,
+    isAgentActive,
+    isModeChanging,
+    setLocalVideoEnabled,
+    teacher,
+  ]);
 
   useEffect(() => {
     if (sessionStartTime == null) return;
@@ -125,35 +248,65 @@ const VideoCallScreen: React.FC = () => {
     }
   }, [endCall, remainingMs, sessionStartTime]);
 
+  useEffect(() => {
+    if (
+      callExperienceMode === "teacher" &&
+      lessonDirector.status === "planning"
+    ) {
+      pauseTeacherDemo();
+    }
+  }, [callExperienceMode, lessonDirector.status, pauseTeacherDemo]);
+
   const canSendChat = transcriptionMode === "rtm" && Boolean(agentRtcUid);
+  const canSendTeacherQuestion =
+    callExperienceMode === "teacher" &&
+    canSendChat &&
+    isAgentActive &&
+    Boolean(agentId) &&
+    Boolean(teacher.session);
   const transcript = (
     <TranscriptSidePanel
-      isOpen
+      isOpen={isTranscriptOpen}
       onClose={() => setIsTranscriptOpen(false)}
       embedded
-      onSendMessage={canSendChat ? sendChatMessage : undefined}
+      showCloseButton
+      onSendMessage={
+        callExperienceMode === "teacher"
+          ? canSendTeacherQuestion
+            ? handleTeacherMessage
+            : undefined
+          : canSendChat
+            ? sendChatMessage
+            : undefined
+      }
     />
   );
 
   return (
     <div className="flex h-screen-dvh flex-col overflow-hidden bg-slate-950 text-white">
-      <header className="flex min-h-16 items-center gap-3 border-b border-white/10 bg-slate-950/95 px-4 py-3 backdrop-blur sm:px-6">
+      <header className="flex min-h-16 flex-wrap items-center gap-3 border-b border-white/10 bg-slate-950/95 px-4 py-3 backdrop-blur sm:flex-nowrap sm:px-6">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold sm:text-base">
-            Private agent call
+            {callExperienceMode === "teacher"
+              ? "AI Teacher classroom"
+              : "Private agent call"}
           </p>
-          <p className="text-xs text-slate-400">
-            {transcriptionMode === "rtm"
-              ? "Connected with Agora RTC + RTM"
-              : "Connected with Agora RTC"}
+          <p className="hidden text-xs text-slate-400 sm:block">
+            {callExperienceMode === "teacher"
+              ? "Powered by Agora Conversational AI"
+              : transcriptionMode === "rtm"
+                ? "Connected with Agora RTC + RTM"
+                : "Connected with Agora RTC"}
           </p>
         </div>
 
-        <CallExperienceModeSwitch
-          value={callExperienceMode}
-          onChange={(mode) => void handleExperienceModeChange(mode)}
-          disabled={isModeChanging}
-        />
+        <div className="order-3 flex w-full justify-center sm:order-none sm:w-auto">
+          <CallExperienceModeSwitch
+            value={callExperienceMode}
+            onChange={(mode) => void handleExperienceModeChange(mode)}
+            disabled={isModeChanging}
+          />
+        </div>
 
         {isAgentActive && (
           <span className="hidden rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-300 sm:inline-flex">
@@ -167,23 +320,43 @@ const VideoCallScreen: React.FC = () => {
           <MdTimer className="text-cyan-300" aria-hidden />
           {formatRemaining(remainingMs)}
         </span>
-        <button
-          type="button"
-          onClick={() => setIsTranscriptOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-lg text-white md:hidden"
-          aria-label="Open transcript and chat"
-          title="Open transcript and chat"
-        >
-          <MdChat />
-        </button>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[350px] shrink-0 border-r border-white/10 bg-slate-900 md:flex md:flex-col">
-          {transcript}
-        </aside>
+        <main className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden">
+          <div
+            className={`absolute inset-3 z-10 sm:inset-5 ${
+              callExperienceMode === "teacher"
+                ? "visible pointer-events-auto"
+                : "invisible pointer-events-none"
+            }`}
+            aria-hidden={callExperienceMode !== "teacher"}
+          >
+            <div className="mx-auto h-full w-full max-w-7xl">
+              <TeacherStage
+                active={callExperienceMode === "teacher"}
+                teacher={teacher}
+                agentId={agentId}
+                agentName={agentSettings?.name || "AI Agent"}
+                agentState={agentState}
+                transcriptionMode={transcriptionMode}
+                avatarVideoTrack={avatarVideoTrack}
+                avatarExpected={
+                  isAgentActive && Boolean(agentSettings?.avatar?.enable)
+                }
+                lessonStatus={lessonDirector.status}
+                lessonProgress={lessonDirector.progress}
+                onClearBoard={lessonDirector.cancelLesson}
+              />
+            </div>
+          </div>
 
-        <main className="flex min-w-0 flex-1 items-center justify-center overflow-y-auto p-3 sm:p-5">
+          <div
+            className={`flex h-full w-full items-center justify-center overflow-y-auto p-3 sm:p-5 ${
+              callExperienceMode === "teacher" ? "invisible" : "visible"
+            }`}
+            aria-hidden={callExperienceMode === "teacher"}
+          >
           {callExperienceMode === "voice" ? (
             <div className="h-full max-h-[44rem] min-h-[22rem] w-full max-w-4xl">
               <VoiceAgentStage
@@ -195,7 +368,7 @@ const VideoCallScreen: React.FC = () => {
                 avatarWaiting={Boolean(agentSettings?.avatar?.enable)}
               />
             </div>
-          ) : (
+          ) : callExperienceMode === "video" ? (
             <div
               className={`grid w-full max-w-6xl gap-3 sm:gap-5 ${
                 isAgentActive ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"
@@ -237,13 +410,27 @@ const VideoCallScreen: React.FC = () => {
                 </div>
               )}
             </div>
-          )}
+          ) : null}
+          </div>
+
+          <TranscriptDrawer
+            isOpen={isTranscriptOpen}
+            onOpen={() => setIsTranscriptOpen(true)}
+            onClose={() => setIsTranscriptOpen(false)}
+          >
+            {transcript}
+          </TranscriptDrawer>
         </main>
       </div>
 
       <Controls
         onEndCall={handleEndCall}
         experienceMode={callExperienceMode}
+        teacherSession={
+          callExperienceMode === "teacher" ? teacher.session : null
+        }
+        onTeacherModeToggle={handleTeacherModeToggle}
+        teacherModeLoading={isModeChanging}
         manualTurnControls={
           isAgentActive &&
           transcriptionMode === "rtm" &&
@@ -266,15 +453,6 @@ const VideoCallScreen: React.FC = () => {
         }
       />
 
-      <BottomSheet
-        isOpen={isTranscriptOpen}
-        onClose={() => setIsTranscriptOpen(false)}
-        title="Transcript & chat"
-        snapPoints={[0.72, 0.94]}
-        contentClassName="p-0"
-      >
-        <div className="h-full min-h-0 bg-slate-900">{transcript}</div>
-      </BottomSheet>
     </div>
   );
 };

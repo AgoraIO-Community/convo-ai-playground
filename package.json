@@ -10,6 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@tanstack/react-query": "^5.80.10",
     "agora-agent-client-toolkit": "2.9.0",
     "agora-rtc-sdk-ng": "4.24.3",
@@ -20,6 +22,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-icons": "^5.5.0",
+    "zod": "^4.5.4",
     "zustand": "^5.0.5"
   },
   "devDependencies": {

@@ -36,6 +36,36 @@ vi.mock("@/screens/VideoCallScreen", () => ({
   default: () => null,
 }));
 
+vi.mock("@/screens/TeacherDemoLandingScreen", () => ({
+  default: ({
+    phase,
+    errorMessage,
+    onEnter,
+    onRetry,
+  }: {
+    phase: "landing" | "joining" | "error";
+    errorMessage: string;
+    onEnter: () => void;
+    onRetry: () => void;
+  }) =>
+    React.createElement(
+      "div",
+      null,
+      phase === "landing"
+        ? React.createElement("button", { onClick: onEnter }, "Enter classroom")
+        : null,
+      phase === "joining" ? React.createElement("p", null, "Joining classroom") : null,
+      phase === "error"
+        ? React.createElement(
+            React.Fragment,
+            null,
+            React.createElement("p", null, errorMessage),
+            React.createElement("button", { onClick: onRetry }, "Try again"),
+          )
+        : null,
+    ),
+}));
+
 import CallBootstrapScreen from "./CallBootstrapScreen";
 
 const rtcSession: RtcSessionResponse = {
@@ -71,6 +101,8 @@ describe("CallBootstrapScreen", () => {
       ),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Enter classroom" }));
+
     await waitFor(() => expect(mocks.joinMeeting).toHaveBeenCalledTimes(1));
     expect(mocks.createRtcSession).toHaveBeenCalledTimes(1);
     expect(mocks.joinMeeting).toHaveBeenCalledWith(rtcSession, false);
@@ -89,6 +121,8 @@ describe("CallBootstrapScreen", () => {
 
     render(React.createElement(CallBootstrapScreen));
 
+    fireEvent.click(screen.getByRole("button", { name: "Enter classroom" }));
+
     await waitFor(() => expect(mocks.joinMeeting).toHaveBeenCalledTimes(1));
     expect(mocks.joinMeeting).toHaveBeenCalledWith(rtcSession, true);
   });
@@ -99,6 +133,8 @@ describe("CallBootstrapScreen", () => {
       .mockResolvedValueOnce(rtcSession);
 
     render(React.createElement(CallBootstrapScreen));
+
+    fireEvent.click(screen.getByRole("button", { name: "Enter classroom" }));
 
     expect(
       await screen.findByText("Camera permission denied"),

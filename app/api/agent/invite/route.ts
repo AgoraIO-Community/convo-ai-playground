@@ -22,6 +22,10 @@ import {
 } from "@/lib/agora/joinPayload";
 import { hydrateAgentProviderCredentials } from "@/server/agentProviderCredentials";
 import { maskSensitive } from "@/server/maskSensitive";
+import {
+  appendTeacherMcpToProperties,
+  type TeacherSessionReference,
+} from "@/server/teacher/mcpConfig";
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE!;
@@ -161,6 +165,7 @@ async function handleCustomPayloadJoin(
     properties: Record<string, unknown>;
   },
   username?: string,
+  teacherSession?: TeacherSessionReference,
 ): Promise<NextResponse> {
   const agentUid = 0;
   const tokenExpiration = 3600;
@@ -533,6 +538,12 @@ async function handleCustomPayloadJoin(
   for (const key of Object.keys(properties)) delete properties[key];
   Object.assign(properties, canonicalCustomProperties, customPassthrough);
   Object.assign(properties, hydrateAgentProviderCredentials(properties));
+  const teacherProperties = await appendTeacherMcpToProperties(
+    properties,
+    teacherSession,
+  );
+  for (const key of Object.keys(properties)) delete properties[key];
+  Object.assign(properties, teacherProperties);
 
   const joinPayload = {
     name: customJoinPayload.name,
@@ -604,6 +615,8 @@ type InviteBody = {
   };
   /** User display name; injected as llm.template_variables.username for greeting */
   username?: string;
+  /** Ephemeral board credentials used only to assemble this runtime payload. */
+  teacherSession?: TeacherSessionReference;
 };
 
 export async function POST(request: NextRequest) {
@@ -616,6 +629,7 @@ export async function POST(request: NextRequest) {
       useCustomPayload,
       customJoinPayload,
       username,
+      teacherSession,
     } = body;
 
     if (!channelName || !uid) {
@@ -635,6 +649,7 @@ export async function POST(request: NextRequest) {
         uid,
         customJoinPayload,
         username,
+        teacherSession,
       );
     }
 
@@ -1442,6 +1457,14 @@ export async function POST(request: NextRequest) {
       propertiesPayload,
       hydrateAgentProviderCredentials(propertiesPayload),
     );
+    const teacherProperties = await appendTeacherMcpToProperties(
+      propertiesPayload,
+      teacherSession,
+    );
+    for (const key of Object.keys(propertiesPayload)) {
+      delete propertiesPayload[key];
+    }
+    Object.assign(propertiesPayload, teacherProperties);
 
     let joinPayload = {
       name: normalizedAgentSettings.name,

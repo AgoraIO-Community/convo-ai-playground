@@ -5,8 +5,10 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isProtectedPage = pathname === "/call" || pathname === "/call-ended";
   const isProtectedAgentApi = pathname.startsWith("/api/agent/");
+  const isProtectedTeacherApi =
+    pathname.startsWith("/api/teacher/") && pathname !== "/api/teacher/mcp";
 
-  if (isProtectedAgentApi && !req.auth) {
+  if ((isProtectedAgentApi || isProtectedTeacherApi) && !req.auth) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
@@ -18,5 +20,10 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/call", "/call-ended", "/api/agent/:path*"],
+  matcher: [
+    "/call",
+    "/call-ended",
+    "/api/agent/:path*",
+    "/api/teacher/:path*",
+  ],
 };

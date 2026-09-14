@@ -6,6 +6,18 @@ import type {
   ThinkResponse,
 } from "@/types/agora";
 import type { AgentTurnsResponse } from "@/types/agentTurns";
+import { toTeacherDrawWireRequest } from "@/lib/teacher/commands";
+import type {
+  TeacherDrawRequest,
+  TeacherSessionCredentials,
+} from "@/types/teacher";
+
+export interface SpeakAgentInput {
+  agentId: string;
+  text: string;
+  priority?: "INTERRUPT" | "APPEND" | "IGNORE";
+  interruptable?: boolean;
+}
 
 export interface CustomJoinPayload {
   name: string;
@@ -25,6 +37,8 @@ export async function inviteAgent(
     customJoinPayload?: CustomJoinPayload;
     /** User display name from create/join screen; sent as username for agent template_variables */
     username?: string;
+    /** Ephemeral board credentials sent only with this agent invite. */
+    teacherSession?: Pick<TeacherSessionCredentials, "sessionId" | "token">;
   },
 ): Promise<{
   agentId: string;
@@ -43,6 +57,9 @@ export async function inviteAgent(
   }
   if (options?.username != null && options.username !== "") {
     body.username = options.username;
+  }
+  if (options?.teacherSession) {
+    body.teacherSession = options.teacherSession;
   }
 
   const response = await fetch("/api/agent/invite", {
@@ -159,6 +176,62 @@ export async function sendAgentInstruction(
   }
 
   return response.json() as Promise<ThinkResponse>;
+}
+
+export async function speakAgent(input: SpeakAgentInput): Promise<void> {
+  const response = await fetch("/api/agent/speak", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    throw new Error(errorData.error || "Failed to make the agent speak");
+  }
+}
+
+export async function interruptAgent(agentId: string): Promise<void> {
+  const response = await fetch("/api/agent/interrupt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agentId }),
+  });
+
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    throw new Error(errorData.error || "Failed to interrupt the agent");
+  }
+}
+
+export async function publishTeacherCue(
+  session: TeacherSessionCredentials,
+  command: TeacherDrawRequest,
+): Promise<{ eventId: number }> {
+  const response = await fetch(
+    `/api/teacher/command?sessionId=${encodeURIComponent(session.sessionId)}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(toTeacherDrawWireRequest(command)),
+    },
+  );
+
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    throw new Error(errorData.error || "Failed to update the teacher board");
+  }
+
+  return response.json() as Promise<{ eventId: number }>;
 }
 
 /**

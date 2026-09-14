@@ -25,6 +25,8 @@ interface TranscriptSidePanelProps {
   onSendMessage?: (text: string, image?: File) => void;
   /** When true, render inline in a sidebar (no overlay, no close button). */
   embedded?: boolean;
+  /** Show a close control when the embedded panel is hosted in a drawer. */
+  showCloseButton?: boolean;
 }
 
 const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
@@ -32,6 +34,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
   onClose,
   onSendMessage,
   embedded = false,
+  showCloseButton = false,
 }) => {
   const transcriptItems = useAppStore((state) => state.transcriptItems);
   const userSentMessages = useAppStore((state) => state.userSentMessages);
@@ -325,12 +328,18 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
               </div>
             </div>
           </div>
-          {!embedded && (
+          {(!embedded || showCloseButton) && (
             <button
+              type="button"
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors shrink-0"
+              aria-label="Close transcript and chat"
+              className="shrink-0 rounded-lg p-2 transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:hover:bg-gray-800"
             >
-              <MdClose className="text-gray-500 dark:text-gray-400" size={24} />
+              <MdClose
+                aria-hidden
+                className="text-gray-500 dark:text-gray-400"
+                size={24}
+              />
             </button>
           )}
         </div>

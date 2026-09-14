@@ -29,10 +29,9 @@ export async function POST(request: NextRequest) {
       params: {},
     };
 
-    const mergedHeaders: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...headers,
-    };
+    const mergedHeaders = new Headers(headers);
+    mergedHeaders.set("Content-Type", "application/json");
+    mergedHeaders.set("Accept", "application/json, text/event-stream");
 
     const res = await fetch(endpoint, {
       method: "POST",

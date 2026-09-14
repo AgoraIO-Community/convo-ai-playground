@@ -1,3 +1,5 @@
+import { AI_TEACHER_DEFAULT_MODEL } from "@/constants/aiTeacherDefaults";
+
 export const OPENAI_MANAGED_MODEL_IDS = [
   "gpt-4o-mini",
   "gpt-4.1-mini",
@@ -6,6 +8,7 @@ export const OPENAI_MANAGED_MODEL_IDS = [
 ] as const;
 
 export const OPENAI_BYOK_MODEL_IDS = [
+  "gpt-6-astra",
   "gpt-5.6-sol",
   "gpt-5.6-terra",
   "gpt-5.6-luna",
@@ -27,7 +30,7 @@ export const OPENAI_BYOK_MODEL_IDS = [
 ] as const;
 
 export const OPENAI_MANAGED_DEFAULT_MODEL = "gpt-5-mini";
-export const OPENAI_BYOK_DEFAULT_MODEL = "gpt-5.6-terra";
+export const OPENAI_BYOK_DEFAULT_MODEL = AI_TEACHER_DEFAULT_MODEL;
 export const OPENAI_CUSTOM_MODEL_VALUE = "__custom_openai_model__";
 
 export function isCuratedOpenAIByokModel(model: string): boolean {

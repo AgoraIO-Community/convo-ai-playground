@@ -71,6 +71,7 @@ import {
   getOpenAIModelControlValue,
   resolveOpenAIModelValue,
 } from "@/lib/agora/openAIModels";
+import { ENGINE_SETTINGS_SCHEMA_VERSION } from "@/lib/agora/engineConfig";
 
 const GEMINI_CUSTOM_MODEL_VALUE = "__custom_gemini_model__";
 const MINIMAX_TTS_URL = "wss://api-uw.minimax.io/ws/v1/t2a_v2";
@@ -761,6 +762,7 @@ export const getDefaultSettings = (): AgentSettingsType => {
   const asrVendor = getDefaultASRVendor();
 
   return {
+    schemaVersion: ENGINE_SETTINGS_SCHEMA_VERSION,
     name: `agent-${Date.now()}`,
     llm: {
       credential_mode: "byok",

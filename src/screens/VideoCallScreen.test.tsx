@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   leaveCall: vi.fn(),
   setLocalVideoEnabled: vi.fn(),
   showToast: vi.fn(),
+  pauseDemo: vi.fn(),
+  clearBoard: vi.fn(),
+  sendTeacherQuestion: vi.fn(),
+  cancelLesson: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -31,6 +35,31 @@ vi.mock("@/hooks/useConversationalAI", () => ({
   useConversationalAI: () => ({ sendChatMessage: vi.fn() }),
 }));
 
+vi.mock("@/hooks/useTeacherBoardSession", () => ({
+  useTeacherBoardSession: () => ({
+    session: {
+      sessionId: "teacher-session-1",
+      token: "teacher-token",
+      liveMcpConfigured: true,
+    },
+    connection: "live",
+    boardState: { elements: {}, order: [], revision: 0 },
+    activeAnimation: null,
+    playDemo: vi.fn(),
+    pauseDemo: mocks.pauseDemo,
+    clearBoard: mocks.clearBoard,
+  }),
+}));
+
+vi.mock("@/hooks/useTeacherLessonDirector", () => ({
+  useTeacherLessonDirector: () => ({
+    status: "idle",
+    progress: null,
+    sendTeacherQuestion: mocks.sendTeacherQuestion,
+    cancelLesson: mocks.cancelLesson,
+  }),
+}));
+
 vi.mock("@/components/AgentTile", () => ({
   default: () => <div data-testid="agent-video-stage" />,
 }));
@@ -38,8 +67,16 @@ vi.mock("@/components/VideoTile", () => ({
   default: () => <div data-testid="local-video-stage" />,
 }));
 vi.mock("@/components/Controls", () => ({
-  default: ({ experienceMode }: { experienceMode: string }) => (
-    <div data-testid="controls" data-experience-mode={experienceMode} />
+  default: ({
+    experienceMode,
+    onTeacherModeToggle,
+  }: {
+    experienceMode: string;
+    onTeacherModeToggle: () => void;
+  }) => (
+    <div data-testid="controls" data-experience-mode={experienceMode}>
+      <button onClick={onTeacherModeToggle}>Toggle Teacher Mode</button>
+    </div>
   ),
 }));
 vi.mock("@/components/common/BottomSheet", () => ({
@@ -49,6 +86,9 @@ vi.mock("@/components/TranscriptSidePanel", () => ({
   default: ({ onSendMessage }: { onSendMessage?: unknown }) => (
     <div data-testid="transcript-panel" data-chat={onSendMessage ? "on" : "off"} />
   ),
+}));
+vi.mock("@/components/teacher/TeacherStage", () => ({
+  default: () => <div data-testid="teacher-stage" />,
 }));
 
 import VideoCallScreen from "./VideoCallScreen";
@@ -64,8 +104,8 @@ describe("VideoCallScreen transcript transport", () => {
       channelId: "channel-1",
       audioMuted: false,
       videoMuted: true,
-      isAgentActive: true,
-      agentId: "runtime-agent-123",
+      isAgentActive: false,
+      agentId: null,
       agentState: EAgentState.IDLE,
       agentRtcUid: "agent-1",
       agentAvatarRtcUid: null,
@@ -75,21 +115,27 @@ describe("VideoCallScreen transcript transport", () => {
     });
   });
 
-  it("shows RTM connectivity and enables chat in RTM mode", () => {
+  it("shows RTM connectivity and enables chat in RTM mode", async () => {
     render(<VideoCallScreen />);
 
-    expect(screen.getByText("Connected with Agora RTC + RTM")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Teacher Mode" }));
+
+    expect(
+      await screen.findByText("Connected with Agora RTC + RTM"),
+    ).toBeInTheDocument();
     expect(screen.getAllByTestId("transcript-panel")[0]).toHaveAttribute(
       "data-chat",
       "on",
     );
   });
 
-  it("shows RTC-only connectivity and disables chat in RTC mode", () => {
+  it("shows RTC-only connectivity and disables chat in RTC mode", async () => {
     useAppStore.setState({ transcriptionMode: "rtc" });
     render(<VideoCallScreen />);
 
-    expect(screen.getByText("Connected with Agora RTC")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Teacher Mode" }));
+
+    expect(await screen.findByText("Connected with Agora RTC")).toBeInTheDocument();
     expect(screen.queryByText("Connected with Agora RTC + RTM")).not.toBeInTheDocument();
     expect(screen.getAllByTestId("transcript-panel")[0]).toHaveAttribute(
       "data-chat",
@@ -97,24 +143,27 @@ describe("VideoCallScreen transcript transport", () => {
     );
   });
 
-  it("updates the label reactively when the active transport changes", () => {
+  it("updates the label reactively when the active transport changes", async () => {
     render(<VideoCallScreen />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Teacher Mode" }));
+    await screen.findByText("Connected with Agora RTC + RTM");
 
     act(() => useAppStore.getState().setTranscriptionMode("rtc"));
 
     expect(screen.getByText("Connected with Agora RTC")).toBeInTheDocument();
   });
 
-  it("starts in voice mode when the camera is unpublished", () => {
+  it("starts in teacher mode when the camera is unpublished", () => {
     render(<VideoCallScreen />);
 
-    expect(screen.getByTestId("voice-agent-stage")).toBeInTheDocument();
+    expect(screen.getByTestId("teacher-stage")).toBeInTheDocument();
+    expect(screen.queryByTestId("voice-agent-stage")).not.toBeInTheDocument();
     expect(screen.queryByTestId("local-video-stage")).not.toBeInTheDocument();
     expect(screen.getByTestId("controls")).toHaveAttribute(
       "data-experience-mode",
-      "voice",
+      "teacher",
     );
-    expect(screen.getByText("runtime-agent-123")).toBeInTheDocument();
   });
 
   it("publishes the camera before entering video mode and preserves transcript", async () => {
@@ -127,13 +176,13 @@ describe("VideoCallScreen transcript transport", () => {
     );
     expect(screen.getByTestId("local-video-stage")).toBeInTheDocument();
     expect(screen.getAllByTestId("transcript-panel")).not.toHaveLength(0);
-    expect(useAppStore.getState().isAgentActive).toBe(true);
+    expect(useAppStore.getState().isAgentActive).toBe(false);
   });
 
   it("stays in voice mode when camera publication fails", async () => {
-    mocks.setLocalVideoEnabled.mockRejectedValueOnce(
-      new Error("Permission denied"),
-    );
+    mocks.setLocalVideoEnabled.mockImplementation(async (enabled: boolean) => {
+      if (enabled) throw new Error("Permission denied");
+    });
     render(<VideoCallScreen />);
 
     fireEvent.click(screen.getByRole("radio", { name: "Video Agent" }));
@@ -146,7 +195,9 @@ describe("VideoCallScreen transcript transport", () => {
   it("unpublishes the camera before returning to voice mode", async () => {
     useAppStore.setState({ videoMuted: false });
     render(<VideoCallScreen />);
-    expect(screen.getByTestId("local-video-stage")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Video Agent" }));
+    await screen.findByTestId("local-video-stage");
 
     fireEvent.click(screen.getByRole("radio", { name: "Voice Agent" }));
 

@@ -6,6 +6,7 @@ import {
   MdMic,
   MdMicOff,
   MdPlayArrow,
+  MdSchool,
   MdSettings,
   MdSync,
   MdStop,
@@ -15,6 +16,7 @@ import {
 import { inviteAgent, stopAgent, updateAgent } from "@/api/agentApi";
 import AgentGlyph from "@/components/AgentGlyph";
 import SettingsSidebar from "@/components/SettingsSidebar";
+import { withAiTeacherRuntimeDefaults } from "@/constants/aiTeacherDefaults";
 import { useAgora } from "@/hooks/useAgora";
 import {
   getTranscriptTransport,
@@ -29,6 +31,7 @@ import {
 import useAppStore from "@/store/useAppStore";
 import type { AgentSettings } from "@/types/agora";
 import type { CallExperienceMode } from "@/types/callExperience";
+import type { TeacherSessionCredentials } from "@/types/teacher";
 import { sanitizeCustomJoinPayload } from "@/utils/customPayloadSanitize";
 
 interface ControlsProps {
@@ -38,6 +41,9 @@ interface ControlsProps {
     onStart?: () => Promise<string>;
     onEnd?: () => Promise<string>;
   };
+  teacherSession?: TeacherSessionCredentials | null;
+  onTeacherModeToggle?: () => Promise<void>;
+  teacherModeLoading?: boolean;
 }
 
 function hasUpdatableChanges(
@@ -77,6 +83,9 @@ const Controls: React.FC<ControlsProps> = ({
   onEndCall,
   experienceMode,
   manualTurnControls,
+  teacherSession,
+  onTeacherModeToggle,
+  teacherModeLoading = false,
 }) => {
   const audioMuted = useAppStore((state) => state.audioMuted);
   const videoMuted = useAppStore((state) => state.videoMuted);
@@ -167,12 +176,20 @@ const Controls: React.FC<ControlsProps> = ({
       setIsSettingsOpen(true);
       return;
     }
+    if (experienceMode === "teacher" && !teacherSession) {
+      showToast(
+        "The teacher board is still preparing. Try again in a moment.",
+        "info",
+      );
+      return;
+    }
 
     setAgentLoading(true);
     try {
       const customSettings = await getCustomAgentSettings();
       const useCustomPayload = Boolean(
-        customSettings?.useCustomPayload &&
+        experienceMode !== "teacher" &&
+          customSettings?.useCustomPayload &&
           customSettings.customPayloadJson?.trim(),
       );
       let customJoinPayload:
@@ -196,7 +213,11 @@ const Controls: React.FC<ControlsProps> = ({
         }
       }
 
-      const normalizedSettings = withTranscriptTransport(agentSettings);
+      const experienceSettings =
+        experienceMode === "teacher"
+          ? withAiTeacherRuntimeDefaults(agentSettings)
+          : agentSettings;
+      const normalizedSettings = withTranscriptTransport(experienceSettings);
       const customAdvancedFeatures = customJoinPayload?.properties
         .advanced_features as Record<string, unknown> | undefined;
       const transport = customJoinPayload
@@ -209,6 +230,12 @@ const Controls: React.FC<ControlsProps> = ({
         useCustomPayload: Boolean(customJoinPayload),
         customJoinPayload,
         username: localUsername || undefined,
+        teacherSession: experienceMode === "teacher" && teacherSession
+          ? {
+              sessionId: teacherSession.sessionId,
+              token: teacherSession.token,
+            }
+          : undefined,
       });
       useAppStore.getState().setTranscriptionMode(transport);
       setAgentActive(
@@ -234,10 +261,12 @@ const Controls: React.FC<ControlsProps> = ({
     agentSettings,
     channelId,
     configureRtm,
+    experienceMode,
     localUID,
     localUsername,
     setAgentActive,
     setAgentLoading,
+    teacherSession,
   ]);
 
   const handleStopAgent = useCallback(async (): Promise<void> => {
@@ -259,14 +288,36 @@ const Controls: React.FC<ControlsProps> = ({
     else await handleInviteAgent();
   }, [handleInviteAgent, handleStopAgent, isAgentActive]);
 
+  const handleTeacherModeToggle = useCallback(async (): Promise<void> => {
+    if (!onTeacherModeToggle) return;
+    try {
+      await onTeacherModeToggle();
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Unable to change Teacher Mode",
+        "error",
+      );
+    }
+  }, [onTeacherModeToggle]);
+
   const handleSaveAgentSettings = useCallback(
     async (settings: AgentSettings): Promise<void> => {
       const previousSettings = useAppStore.getState().agentSettings;
-      const normalizedSettings = withTranscriptTransport(settings);
-      setAgentSettings(normalizedSettings);
+      const persistedSettings = withTranscriptTransport(settings);
+      const runtimeSettings =
+        experienceMode === "teacher"
+          ? withAiTeacherRuntimeDefaults(persistedSettings)
+          : persistedSettings;
+      const previousRuntimeSettings =
+        previousSettings && experienceMode === "teacher"
+          ? withAiTeacherRuntimeDefaults(previousSettings)
+          : previousSettings;
+      setAgentSettings(persistedSettings);
 
       try {
-        await persistAgentSettings(normalizedSettings);
+        await persistAgentSettings(persistedSettings);
       } catch (error) {
         console.error("Unable to persist agent settings", error);
       }
@@ -276,15 +327,18 @@ const Controls: React.FC<ControlsProps> = ({
         return;
       }
 
-      const canUpdate = hasUpdatableChanges(previousSettings, normalizedSettings);
+      const canUpdate = hasUpdatableChanges(
+        previousRuntimeSettings,
+        runtimeSettings,
+      );
       const needsRestart = hasRestartRequiredChanges(
-        previousSettings,
-        normalizedSettings,
+        previousRuntimeSettings,
+        runtimeSettings,
       );
       if (canUpdate) {
         setAgentUpdating(true);
         try {
-          await updateAgent(agentId, channelId, normalizedSettings);
+          await updateAgent(agentId, channelId, runtimeSettings);
           showToast("Agent configuration updated", "success");
         } catch (error) {
           showToast(
@@ -307,6 +361,7 @@ const Controls: React.FC<ControlsProps> = ({
     [
       agentId,
       channelId,
+      experienceMode,
       isAgentActive,
       setAgentSettings,
       setAgentUpdating,
@@ -380,7 +435,13 @@ const Controls: React.FC<ControlsProps> = ({
           <button
             type="button"
             onClick={() => void handleToggleAgent()}
-            disabled={isAgentLoading || isAgentUpdating}
+            disabled={
+              isAgentLoading ||
+              isAgentUpdating ||
+              (!isAgentActive &&
+                experienceMode === "teacher" &&
+                !teacherSession)
+            }
             className={`${circleButton} w-auto gap-2 px-3 disabled:cursor-wait disabled:opacity-60 sm:w-auto`}
             aria-label={agentLabel}
             title={agentLabel}
@@ -398,6 +459,35 @@ const Controls: React.FC<ControlsProps> = ({
                   : agentLabel}
             </span>
           </button>
+          {onTeacherModeToggle && (
+            <button
+              type="button"
+              onClick={() => void handleTeacherModeToggle()}
+              disabled={teacherModeLoading}
+              className={`${circleButton} ${
+                experienceMode === "teacher"
+                  ? "border-cyan-200/45 bg-cyan-300/20 text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.14)]"
+                  : ""
+              } disabled:cursor-wait disabled:opacity-60`}
+              aria-label={
+                experienceMode === "teacher"
+                  ? "Exit Teacher Mode"
+                  : "Enter Teacher Mode"
+              }
+              aria-pressed={experienceMode === "teacher"}
+              title={
+                experienceMode === "teacher"
+                  ? "Exit Teacher Mode"
+                  : "Enter Teacher Mode"
+              }
+            >
+              {teacherModeLoading ? (
+                <MdSync className="animate-spin" />
+              ) : (
+                <MdSchool />
+              )}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setIsSettingsOpen(true)}

@@ -2,16 +2,19 @@
 
 import React from "react";
 import { MdMicNone, MdVideocam } from "react-icons/md";
-import type { CallExperienceMode } from "@/types/callExperience";
+import type {
+  CallExperienceMode,
+  StandardCallExperienceMode,
+} from "@/types/callExperience";
 
 interface CallExperienceModeSwitchProps {
   value: CallExperienceMode;
-  onChange: (mode: CallExperienceMode) => void;
+  onChange: (mode: StandardCallExperienceMode) => void;
   disabled?: boolean;
 }
 
 const choices: Array<{
-  value: CallExperienceMode;
+  value: StandardCallExperienceMode;
   label: string;
   icon: React.ReactNode;
 }> = [
