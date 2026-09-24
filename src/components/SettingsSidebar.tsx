@@ -64,6 +64,7 @@ import {
   normalizeManagedASR,
   normalizeManagedLLM,
   normalizeManagedTTS,
+  type ManagedASRVendor,
   type ManagedTTSVendor,
 } from "@/lib/agora/managedProviders";
 import {
@@ -72,8 +73,14 @@ import {
   resolveOpenAIModelValue,
 } from "@/lib/agora/openAIModels";
 import { ENGINE_SETTINGS_SCHEMA_VERSION } from "@/lib/agora/engineConfig";
+import {
+  DEFAULT_AGORA_API_BASE_URL,
+  normalizeAgoraApiBaseUrl,
+} from "@/lib/agora/apiBaseUrl";
 
 const GEMINI_CUSTOM_MODEL_VALUE = "__custom_gemini_model__";
+const LOCAL_DEFAULT_ASR_VALUE = "__local_default_asr__";
+type ASRSelection = ASRVendor | typeof LOCAL_DEFAULT_ASR_VALUE;
 const MINIMAX_TTS_URL = "wss://api-uw.minimax.io/ws/v1/t2a_v2";
 const MINIMAX_DEFAULT_MODEL = "speech-2.8-turbo";
 
@@ -680,6 +687,12 @@ export const getDefaultASRConfig = (vendor: ASRVendor): ASRConfig => {
         vendor: "ares",
         language,
       };
+    case "fengming":
+      return {
+        credential_mode: "managed",
+        vendor: "fengming",
+        language,
+      };
     default:
       return {
         vendor,
@@ -763,6 +776,7 @@ export const getDefaultSettings = (): AgentSettingsType => {
 
   return {
     schemaVersion: ENGINE_SETTINGS_SCHEMA_VERSION,
+    api_base_url: DEFAULT_AGORA_API_BASE_URL,
     name: `agent-${Date.now()}`,
     llm: {
       credential_mode: "byok",
@@ -2178,7 +2192,9 @@ const AgentSettingsSidebarContent: React.FC<{
       setTurnsLoading(true);
       setTurnsError(null);
       try {
-        const data = await queryAgentTurns(id);
+        const data = await queryAgentTurns(id, {
+          apiBaseUrl: settings.api_base_url,
+        });
         setTurnsData(data);
         if (!data.turns?.length) {
           showToast(
@@ -2194,7 +2210,7 @@ const AgentSettingsSidebarContent: React.FC<{
         setTurnsLoading(false);
       }
     },
-    [agentId],
+    [agentId, settings.api_base_url],
   );
 
   React.useEffect(() => {
@@ -2219,7 +2235,7 @@ const AgentSettingsSidebarContent: React.FC<{
   const [selectedTTSVendor, setSelectedTTSVendor] = React.useState<TTSVendor>(
     getDefaultTTSVendor(),
   );
-  const [selectedASRVendor, setSelectedASRVendor] = React.useState<ASRVendor>(
+  const [selectedASRVendor, setSelectedASRVendor] = React.useState<ASRSelection>(
     getDefaultASRVendor(),
   );
   const [selectedAvatarVendor, setSelectedAvatarVendor] =
@@ -2259,7 +2275,7 @@ const AgentSettingsSidebarContent: React.FC<{
   } | null>(null);
   const asrByokDraft = React.useRef<{
     config: ASRConfig;
-    selectedVendor: ASRVendor;
+    selectedVendor: ASRSelection;
   } | null>(null);
 
   // Track whether form is initialized from store (to prevent infinite sync loop)
@@ -2312,8 +2328,13 @@ const AgentSettingsSidebarContent: React.FC<{
       if (existingSettings.tts?.vendor in TTS_PRESETS) {
         setSelectedTTSVendor(existingSettings.tts.vendor as TTSVendor);
       }
-      if (existingSettings.asr?.vendor && existingSettings.asr.vendor in ASR_PRESETS) {
+      if (
+        existingSettings.asr?.vendor &&
+        existingSettings.asr.vendor in ASR_PRESETS
+      ) {
         setSelectedASRVendor(existingSettings.asr.vendor as ASRVendor);
+      } else if (!existingSettings.asr) {
+        setSelectedASRVendor(LOCAL_DEFAULT_ASR_VALUE);
       }
       isFormInitialized.current = true;
     }
@@ -2619,15 +2640,43 @@ const AgentSettingsSidebarContent: React.FC<{
     updateTTS({ vendor, params: defaultParams });
   };
 
-  const handleASRVendorChange = (vendor: ASRVendor) => {
+  const handleASRVendorChange = (selection: ASRSelection) => {
+    if (selection === LOCAL_DEFAULT_ASR_VALUE) {
+      setSelectedASRVendor(LOCAL_DEFAULT_ASR_VALUE);
+      setSettings((prev) => {
+        const next = { ...prev };
+        delete next.asr;
+        return next;
+      });
+      return;
+    }
+
+    const vendor = selection;
     if (settings.asr?.credential_mode === "managed") {
-      setSelectedASRVendor("deepgram");
+      const managedVendor = vendor as ManagedASRVendor;
+      setSelectedASRVendor(managedVendor);
       setSettings((prev) => ({
         ...prev,
-        asr: normalizeManagedASR(prev.asr),
+        asr: normalizeManagedASR(prev.asr, managedVendor),
       }));
       return;
     }
+
+    if (vendor === "fengming") {
+      asrByokDraft.current = settings.asr
+        ? {
+            config: cloneSettingsBlock(settings.asr),
+            selectedVendor: selectedASRVendor,
+          }
+        : null;
+      setSelectedASRVendor("fengming");
+      setSettings((prev) => ({
+        ...prev,
+        asr: normalizeManagedASR(prev.asr, "fengming"),
+      }));
+      return;
+    }
+
     setSelectedASRVendor(vendor);
     const defaultParams: Record<string, unknown> = {};
 
@@ -2714,7 +2763,17 @@ const AgentSettingsSidebarContent: React.FC<{
         return;
       }
     }
-    await onSave(settings);
+    let apiBaseUrl: string;
+    try {
+      apiBaseUrl = normalizeAgoraApiBaseUrl(settings.api_base_url);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Invalid Agora API base URL.",
+        "error",
+      );
+      return;
+    }
+    await onSave({ ...settings, api_base_url: apiBaseUrl });
   }, [
     isOpenAIByok,
     isGeminiByok,
@@ -2920,14 +2979,20 @@ const AgentSettingsSidebarContent: React.FC<{
     : Object.entries(TTS_PRESETS)
         .filter(([key]) => key !== "fish_audio" && key !== "polly")
         .map(([value, provider]) => ({ value, label: provider.label }));
-  const asrProviderOptions = asrManaged
-    ? Object.entries(MANAGED_ASR_PROVIDERS).map(([value, provider]) => ({
-        value,
-        label: provider.label,
-      }))
-    : Object.entries(ASR_PRESETS)
-        .filter(([key]) => key !== "transcribe")
-        .map(([value, provider]) => ({ value, label: provider.label }));
+  const asrProviderOptions = [
+    {
+      value: LOCAL_DEFAULT_ASR_VALUE,
+      label: "Local backend default (omit ASR)",
+    },
+    ...(asrManaged
+      ? Object.entries(MANAGED_ASR_PROVIDERS).map(([value, provider]) => ({
+          value,
+          label: provider.label,
+        }))
+      : Object.entries(ASR_PRESETS)
+          .filter(([key]) => key !== "transcribe")
+          .map(([value, provider]) => ({ value, label: provider.label }))),
+  ];
   const asrModels = asrManaged
     ? MANAGED_ASR_PROVIDERS.deepgram.models
     : ASR_PRESETS.deepgram.models ?? [];
@@ -2979,6 +3044,46 @@ const AgentSettingsSidebarContent: React.FC<{
             }
             placeholder="Published pipeline ID"
           />
+        </FormField>
+
+        <FormField
+          label="Agora API base URL"
+          hint={
+            isAgentActive
+              ? "Stop the active agent before changing its API endpoint."
+              : "Used by the server routes for join, status, update, think, turns, and stop requests."
+          }
+          tooltip="Default Agora Conversational AI REST base URL. Override it to test a compatible local backend."
+        >
+          <div className="space-y-2">
+            <Input
+              type="url"
+              value={settings.api_base_url ?? DEFAULT_AGORA_API_BASE_URL}
+              onChange={(event) =>
+                setSettings({ ...settings, api_base_url: event.target.value })
+              }
+              placeholder={DEFAULT_AGORA_API_BASE_URL}
+              disabled={isAgentActive}
+            />
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() =>
+                  setSettings({
+                    ...settings,
+                    api_base_url: DEFAULT_AGORA_API_BASE_URL,
+                  })
+                }
+                disabled={
+                  isAgentActive ||
+                  settings.api_base_url === DEFAULT_AGORA_API_BASE_URL
+                }
+                className="text-xs font-medium text-agora-accent-blue hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline dark:disabled:text-gray-600"
+              >
+                Reset to default
+              </button>
+            </div>
+          </div>
         </FormField>
 
         {/* LLM Section */}
@@ -4150,71 +4255,92 @@ const AgentSettingsSidebarContent: React.FC<{
         >
           <FormField
             label="Vendor"
-            hint="ARES is Agora's built-in ASR (no API key needed)"
+            hint="Use Fengming for managed ASR in China, or omit ASR to let a compatible local backend choose its default."
           >
             <CustomSelect
               value={selectedASRVendor}
-              onChange={(v) => handleASRVendorChange(v as ASRVendor)}
+              onChange={(v) => handleASRVendorChange(v as ASRSelection)}
               options={asrProviderOptions}
             />
           </FormField>
 
-          <FormField label="Credential mode">
-            <CustomSelect
-              value={settings.asr?.credential_mode ?? "byok"}
-              onChange={(credentialMode) =>
-                handleASRCredentialModeChange(
-                  credentialMode as "managed" | "byok",
-                )
-              }
-              options={[
-                { value: "byok", label: "Bring your own key (BYOK)" },
-                { value: "managed", label: "Agora managed" },
-              ]}
-            />
-          </FormField>
+          {selectedASRVendor === LOCAL_DEFAULT_ASR_VALUE && (
+            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
+              The join request will omit <code>properties.asr</code>. Your local
+              backend can select its regional default recognizer.
+            </div>
+          )}
 
-          <FormField label="Language" required>
-            <CustomSelect
-              value={settings.asr?.language || "en-US"}
-              onChange={(language) => {
-                const params = (settings.asr?.params ?? {}) as Record<
-                  string,
-                  unknown
-                >;
-                if (selectedASRVendor === "gemini") {
-                  updateASR({ language, params: { ...params, language } });
-                  return;
+          {selectedASRVendor === "fengming" && (
+            <FormField
+              label="Credential mode"
+              hint="Fengming is provided by the China service and does not require a BYOK credential."
+            >
+              <Input value="Agora managed" disabled />
+            </FormField>
+          )}
+
+          {selectedASRVendor !== LOCAL_DEFAULT_ASR_VALUE &&
+            selectedASRVendor !== "fengming" && (
+            <FormField label="Credential mode">
+              <CustomSelect
+                value={settings.asr?.credential_mode ?? "byok"}
+                onChange={(credentialMode) =>
+                  handleASRCredentialModeChange(
+                    credentialMode as "managed" | "byok",
+                  )
                 }
-                if (selectedASRVendor === "openai") {
-                  const transcription =
-                    typeof params.input_audio_transcription === "object" &&
-                    params.input_audio_transcription !== null
-                      ? (params.input_audio_transcription as Record<
-                          string,
-                          unknown
-                        >)
-                      : {};
-                  updateASR({
-                    language,
-                    params: {
-                      ...params,
-                      input_audio_transcription: {
-                        ...transcription,
-                        language: openAIASRLanguage(language),
+                options={[
+                  { value: "byok", label: "Bring your own key (BYOK)" },
+                  { value: "managed", label: "Agora managed" },
+                ]}
+              />
+            </FormField>
+            )}
+
+          {selectedASRVendor !== LOCAL_DEFAULT_ASR_VALUE && (
+            <FormField label="Language" required>
+              <CustomSelect
+                value={settings.asr?.language || "en-US"}
+                onChange={(language) => {
+                  const params = (settings.asr?.params ?? {}) as Record<
+                    string,
+                    unknown
+                  >;
+                  if (selectedASRVendor === "gemini") {
+                    updateASR({ language, params: { ...params, language } });
+                    return;
+                  }
+                  if (selectedASRVendor === "openai") {
+                    const transcription =
+                      typeof params.input_audio_transcription === "object" &&
+                      params.input_audio_transcription !== null
+                        ? (params.input_audio_transcription as Record<
+                            string,
+                            unknown
+                          >)
+                        : {};
+                    updateASR({
+                      language,
+                      params: {
+                        ...params,
+                        input_audio_transcription: {
+                          ...transcription,
+                          language: openAIASRLanguage(language),
+                        },
                       },
-                    },
-                  });
-                  return;
-                }
-                updateASR({ language });
-              }}
-              options={SUPPORTED_LANGUAGES.map((lang) => ({
-                value: lang.code,
-                label: `${lang.label} (${lang.code})`,
-              }))}
-            />
-          </FormField>
+                    });
+                    return;
+                  }
+                  updateASR({ language });
+                }}
+                options={SUPPORTED_LANGUAGES.map((lang) => ({
+                  value: lang.code,
+                  label: `${lang.label} (${lang.code})`,
+                }))}
+              />
+            </FormField>
+          )}
 
           {selectedASRVendor === "ares" && (
             <FormField
@@ -4365,7 +4491,7 @@ const AgentSettingsSidebarContent: React.FC<{
               />
             </FormField>
           )}
-          {!asrManaged && (
+          {!asrManaged && selectedASRVendor !== LOCAL_DEFAULT_ASR_VALUE && (
             <FormField
               label="Provider parameters (JSON)"
               hint="Vendor-specific v2.11 parameters for the selected recognizer."

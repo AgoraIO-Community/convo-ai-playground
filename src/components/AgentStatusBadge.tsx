@@ -66,6 +66,9 @@ const LIVE_SIGNAL_STYLES: Record<
 
 const AgentStatusBadge: React.FC = () => {
   const agentId = useAppStore((state) => state.agentId);
+  const apiBaseUrl = useAppStore(
+    (state) => state.agentSettings?.api_base_url,
+  );
   const agentQueryStatus = useAppStore((state) => state.agentQueryStatus);
   const setAgentQueryStatus = useAppStore((state) => state.setAgentQueryStatus);
   const agentListening = useAppStore((state) => state.agentListening);
@@ -82,13 +85,13 @@ const AgentStatusBadge: React.FC = () => {
   const fetchStatus = useCallback(async () => {
     if (!agentId) return;
     try {
-      const status = await queryAgent(agentId);
+      const status = await queryAgent(agentId, apiBaseUrl);
       setAgentQueryStatus(status);
       setLastRefreshedAt(new Date());
     } catch (error) {
       console.error("[AgentStatusBadge] Query failed:", error);
     }
-  }, [agentId, setAgentQueryStatus]);
+  }, [agentId, apiBaseUrl, setAgentQueryStatus]);
 
   const handleManualRefresh = useCallback(async () => {
     setIsRefreshing(true);

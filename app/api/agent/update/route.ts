@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { RtcTokenBuilder, RtcRole } from "agora-token";
 import type { AgentSettings } from "@/types/agora";
 import { migrateAgentSettings } from "@/lib/agora/engineConfig";
+import { buildAgoraProjectApiUrl } from "@/lib/agora/apiBaseUrl";
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE!;
@@ -111,7 +112,11 @@ export async function POST(request: NextRequest) {
     const authHeader = Buffer.from(
       `${CUSTOMER_ID}:${CUSTOMER_SECRET}`
     ).toString("base64");
-    const apiUrl = `https://api.agora.io/api/conversational-ai-agent/v2/projects/${APP_ID}/agents/${agentId}/update`;
+    const apiUrl = buildAgoraProjectApiUrl(
+      currentSettings.api_base_url,
+      APP_ID,
+      `/agents/${encodeURIComponent(agentId)}/update`,
+    );
 
     const agoraResponse = await fetch(apiUrl, {
       method: "POST",

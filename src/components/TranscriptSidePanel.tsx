@@ -49,6 +49,9 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
   const agentRtcUid = useAppStore((state) => state.agentRtcUid);
   const localUID = useAppStore((state) => state.localUID);
   const agentId = useAppStore((state) => state.agentId);
+  const apiBaseUrl = useAppStore(
+    (state) => state.agentSettings?.api_base_url,
+  );
   const isAgentActive = useAppStore((state) => state.isAgentActive);
   const instructionLog = useAppStore((state) => state.instructionLog);
   const addInstructionLogEntry = useAppStore(
@@ -145,7 +148,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
     setInstructionText("");
     setIsSendingInstruction(true);
     try {
-      await sendAgentInstruction(agentId, { text, ...options });
+      await sendAgentInstruction(agentId, { text, ...options }, apiBaseUrl);
       updateInstructionLogEntry(id, { status: "sent" });
     } catch (err) {
       const message =
@@ -162,6 +165,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
     instructionText,
     agentId,
     isAgentActive,
+    apiBaseUrl,
     onListening,
     onThinking,
     onSpeaking,

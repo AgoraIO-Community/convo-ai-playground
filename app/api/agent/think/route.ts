@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { ThinkOptions } from "@/types/agora";
+import { buildAgoraProjectApiUrl } from "@/lib/agora/apiBaseUrl";
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 const CUSTOMER_ID = process.env.AGORA_CUSTOMER_ID!;
@@ -16,12 +17,13 @@ const CUSTOMER_SECRET = process.env.AGORA_CUSTOMER_SECRET!;
 type ThinkRequestBody = {
   agentId: string;
   options: ThinkOptions;
+  apiBaseUrl?: string;
 };
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ThinkRequestBody;
-    const { agentId, options } = body ?? ({} as ThinkRequestBody);
+    const { agentId, options, apiBaseUrl } = body ?? ({} as ThinkRequestBody);
 
     if (!agentId) {
       return NextResponse.json(
@@ -59,7 +61,11 @@ export async function POST(request: NextRequest) {
     const authHeader = Buffer.from(
       `${CUSTOMER_ID}:${CUSTOMER_SECRET}`,
     ).toString("base64");
-    const apiUrl = `https://api.agora.io/api/conversational-ai-agent/v2/projects/${APP_ID}/agents/${agentId}/think`;
+    const apiUrl = buildAgoraProjectApiUrl(
+      apiBaseUrl,
+      APP_ID,
+      `/agents/${encodeURIComponent(agentId)}/think`,
+    );
 
     if (
       process.env.AGORA_LOG_PAYLOAD_VERBOSE === "1" ||

@@ -60,6 +60,11 @@ describe("Agora managed provider catalog", () => {
         defaultModel: "nova-3",
         models: ["nova-2", "nova-3"],
       },
+      fengming: {
+        label: "Agora Fengming (China)",
+        defaultModel: "",
+        models: [],
+      },
     });
     expect(MANAGED_LLM_PROVIDERS).toEqual({
       openai: {
@@ -259,6 +264,21 @@ describe("managed provider normalization", () => {
       },
     });
   });
+
+  it("normalizes Fengming as managed ASR without credentials or a model", () => {
+    const asr: ASRConfig = {
+      credential_mode: "byok",
+      vendor: "deepgram",
+      language: "en-US",
+      params: { api_key: "deepgram-secret", model: "nova-3" },
+    };
+
+    expect(normalizeManagedASR(asr, "fengming")).toEqual({
+      credential_mode: "managed",
+      vendor: "fengming",
+      language: "en-US",
+    });
+  });
 });
 
 describe("managed provider membership", () => {
@@ -272,6 +292,7 @@ describe("managed provider membership", () => {
     expect(isSupportedManagedTTS("elevenlabs", "eleven_flash_v2_5")).toBe(false);
 
     expect(isSupportedManagedASR("deepgram", "nova-2")).toBe(true);
+    expect(isSupportedManagedASR("fengming", undefined)).toBe(true);
     expect(isSupportedManagedASR("ares", "nova-2")).toBe(false);
     expect(isSupportedManagedASR("deepgram", "base")).toBe(false);
   });

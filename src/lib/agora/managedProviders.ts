@@ -65,6 +65,11 @@ export const MANAGED_ASR_PROVIDERS = {
     defaultModel: "nova-3",
     models: ["nova-2", "nova-3"],
   },
+  fengming: {
+    label: "Agora Fengming (China)",
+    defaultModel: "",
+    models: [],
+  },
 } as const satisfies Record<string, ManagedProviderDefinition>;
 
 export const MANAGED_LLM_PROVIDERS = {
@@ -138,10 +143,9 @@ export function isSupportedManagedASR(
   vendor: ASRVendor | string | undefined,
   model: unknown,
 ): boolean {
-  return (
-    hasManagedProvider(MANAGED_ASR_PROVIDERS, vendor) &&
-    supportsModel(MANAGED_ASR_PROVIDERS[vendor], model)
-  );
+  if (!hasManagedProvider(MANAGED_ASR_PROVIDERS, vendor)) return false;
+  if (vendor === "fengming") return model == null || model === "";
+  return supportsModel(MANAGED_ASR_PROVIDERS[vendor], model);
 }
 
 export function isSupportedManagedLLM(
@@ -236,14 +240,25 @@ export function normalizeManagedTTS(
   };
 }
 
-export function normalizeManagedASR(config: ASRConfig = {}): ASRConfig {
+export function normalizeManagedASR(
+  config: ASRConfig = {},
+  vendor: ManagedASRVendor = "deepgram",
+): ASRConfig {
+  const language = config.language || "en-US";
+  if (vendor === "fengming") {
+    return {
+      credential_mode: "managed",
+      vendor: "fengming",
+      language,
+    };
+  }
+
   const definition = MANAGED_ASR_PROVIDERS.deepgram;
   const currentParams = (config.params ?? {}) as Record<string, unknown>;
   const model =
     config.vendor === "deepgram" && supportsModel(definition, currentParams.model)
       ? currentParams.model
       : definition.defaultModel;
-  const language = config.language || "en-US";
   const params =
     config.vendor === "deepgram" ? withoutCredentials(currentParams) : {};
 

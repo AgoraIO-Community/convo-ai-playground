@@ -947,7 +947,7 @@ describe("SettingsSidebar transcript transport", () => {
     });
   });
 
-  it("shows only Deepgram Nova models in managed ASR", () => {
+  it("offers Deepgram, Fengming, and local-default choices in managed ASR", () => {
     render(
       <SettingsSidebar
         isOpen
@@ -963,8 +963,19 @@ describe("SettingsSidebar transcript transport", () => {
       "Deepgram",
     );
     fireEvent.click(getSelectButton("Vendor"));
-    expect(within(getOpenField("Vendor")).getAllByRole("button")).toHaveLength(2);
-    expect(within(getOpenField("Vendor")).queryByRole("button", { name: "ARES" })).not.toBeInTheDocument();
+    expect(
+      within(getOpenField("Vendor")).getByRole("button", {
+        name: "Agora Fengming (China)",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(getOpenField("Vendor")).getByRole("button", {
+        name: "Local backend default (omit ASR)",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(getOpenField("Vendor")).queryByRole("button", { name: "ARES" }),
+    ).not.toBeInTheDocument();
     fireEvent.click(
       within(getOpenField("Vendor")).getAllByRole("button", {
         name: "Deepgram",

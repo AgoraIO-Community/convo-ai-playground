@@ -26,28 +26,43 @@ import {
   appendTeacherMcpToProperties,
   type TeacherSessionReference,
 } from "@/server/teacher/mcpConfig";
+import {
+  DEFAULT_AGORA_API_BASE_URL,
+  GEMINI_PREVIEW_API_BASE_URL,
+  buildAgoraProjectApiUrl,
+  normalizeAgoraApiBaseUrl,
+} from "@/lib/agora/apiBaseUrl";
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE!;
 const CUSTOMER_ID = process.env.AGORA_CUSTOMER_ID!;
 const CUSTOMER_SECRET = process.env.AGORA_CUSTOMER_SECRET!;
 
-function getJoinRequestConfig(properties: Record<string, unknown>): {
+function getJoinRequestConfig(
+  properties: Record<string, unknown>,
+  requestedBaseUrl?: string,
+): {
   apiUrl: string;
   featureHeaders: Record<string, string>;
 } {
+  const apiBaseUrl = normalizeAgoraApiBaseUrl(requestedBaseUrl);
+  const usesDefaultBaseUrl = apiBaseUrl === DEFAULT_AGORA_API_BASE_URL;
   const asr =
     properties.asr && typeof properties.asr === "object"
       ? (properties.asr as Record<string, unknown>)
       : undefined;
-  if (asr?.vendor === "gemini") {
+  if (asr?.vendor === "gemini" && usesDefaultBaseUrl) {
     return {
-      apiUrl: `https://partner.ai.agora.io/preview/api/conversational-ai-agent/v2/projects/${APP_ID}/join`,
+      apiUrl: buildAgoraProjectApiUrl(
+        GEMINI_PREVIEW_API_BASE_URL,
+        APP_ID,
+        "/join",
+      ),
       featureHeaders: { "agora-feature": "gemini-live" },
     };
   }
   return {
-    apiUrl: `https://api.agora.io/api/conversational-ai-agent/v2/projects/${APP_ID}/join`,
+    apiUrl: buildAgoraProjectApiUrl(apiBaseUrl, APP_ID, "/join"),
     featureHeaders: {},
   };
 }
@@ -166,6 +181,7 @@ async function handleCustomPayloadJoin(
   },
   username?: string,
   teacherSession?: TeacherSessionReference,
+  apiBaseUrl?: string,
 ): Promise<NextResponse> {
   const agentUid = 0;
   const tokenExpiration = 3600;
@@ -555,7 +571,10 @@ async function handleCustomPayloadJoin(
   const authHeader = Buffer.from(`${CUSTOMER_ID}:${CUSTOMER_SECRET}`).toString(
     "base64",
   );
-  const { apiUrl, featureHeaders } = getJoinRequestConfig(properties);
+  const { apiUrl, featureHeaders } = getJoinRequestConfig(
+    properties,
+    apiBaseUrl,
+  );
 
   const sanitized = maskSensitive(joinPayload);
   console.log(
@@ -650,6 +669,7 @@ export async function POST(request: NextRequest) {
         customJoinPayload,
         username,
         teacherSession,
+        agentSettings?.api_base_url,
       );
     }
 
@@ -1478,7 +1498,10 @@ export async function POST(request: NextRequest) {
     const authHeader = Buffer.from(
       `${CUSTOMER_ID}:${CUSTOMER_SECRET}`,
     ).toString("base64");
-    const { apiUrl, featureHeaders } = getJoinRequestConfig(propertiesPayload);
+    const { apiUrl, featureHeaders } = getJoinRequestConfig(
+      propertiesPayload,
+      normalizedAgentSettings.api_base_url,
+    );
 
     // Recursively sanitize every provider credential and RTC token before logging.
     const sanitizedPayload = maskSensitive(joinPayload);

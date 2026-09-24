@@ -109,8 +109,11 @@ export async function updateAgent(
  */
 export async function queryAgent(
   agentId: string,
+  apiBaseUrl?: string,
 ): Promise<AgentQueryStatus> {
-  const response = await fetch(`/api/agent/query?agentId=${encodeURIComponent(agentId)}`);
+  const search = new URLSearchParams({ agentId });
+  if (apiBaseUrl) search.set("apiBaseUrl", apiBaseUrl);
+  const response = await fetch(`/api/agent/query?${search.toString()}`);
 
   if (!response.ok) {
     const errorData = await response.json();
@@ -126,11 +129,12 @@ export async function queryAgent(
  */
 export async function queryAgentTurns(
   agentId: string,
-  options: { cursor?: string; limit?: number } = {},
+  options: { cursor?: string; limit?: number; apiBaseUrl?: string } = {},
 ): Promise<AgentTurnsResponse> {
   const search = new URLSearchParams({ agentId });
   if (options.cursor) search.set("cursor", options.cursor);
   if (options.limit !== undefined) search.set("limit", String(options.limit));
+  if (options.apiBaseUrl) search.set("apiBaseUrl", options.apiBaseUrl);
   const response = await fetch(`/api/agent/turns?${search.toString()}`);
 
   if (!response.ok) {
@@ -160,11 +164,12 @@ export async function queryAgentTurns(
 export async function sendAgentInstruction(
   agentId: string,
   options: ThinkOptions,
+  apiBaseUrl?: string,
 ): Promise<ThinkResponse> {
   const response = await fetch("/api/agent/think", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ agentId, options }),
+    body: JSON.stringify({ agentId, options, apiBaseUrl }),
   });
 
   if (!response.ok) {
@@ -239,11 +244,12 @@ export async function publishTeacherCue(
  */
 export async function stopAgent(
   agentId: string,
+  apiBaseUrl?: string,
 ): Promise<{ success: boolean }> {
   const response = await fetch("/api/agent/stop", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ agentId }),
+    body: JSON.stringify({ agentId, apiBaseUrl }),
   });
 
   if (!response.ok) {

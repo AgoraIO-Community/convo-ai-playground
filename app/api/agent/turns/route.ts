@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildAgoraProjectApiUrl } from "@/lib/agora/apiBaseUrl";
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 const CUSTOMER_ID = process.env.AGORA_CUSTOMER_ID!;
@@ -9,6 +10,7 @@ export async function GET(request: NextRequest) {
     const agentId = request.nextUrl.searchParams.get("agentId");
     const cursor = request.nextUrl.searchParams.get("cursor");
     const rawLimit = request.nextUrl.searchParams.get("limit");
+    const apiBaseUrl = request.nextUrl.searchParams.get("apiBaseUrl") ?? undefined;
 
     if (!agentId) {
       return NextResponse.json(
@@ -42,7 +44,11 @@ export async function GET(request: NextRequest) {
     ).toString("base64");
 
     const agoraTurnsUrl = new URL(
-      `https://api.agora.io/api/conversational-ai-agent/v2/projects/${encodeURIComponent(APP_ID)}/agents/${encodeURIComponent(agentId)}/turns`,
+      buildAgoraProjectApiUrl(
+        apiBaseUrl,
+        APP_ID,
+        `/agents/${encodeURIComponent(agentId)}/turns`,
+      ),
     );
     if (cursor) agoraTurnsUrl.searchParams.set("cursor", cursor);
     if (limit !== undefined) agoraTurnsUrl.searchParams.set("limit", String(limit));

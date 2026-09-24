@@ -275,7 +275,7 @@ export const useAgora = () => {
       const state = useAppStore.getState();
       if (state.agentId) {
         try {
-          await stopAgent(state.agentId);
+          await stopAgent(state.agentId, state.agentSettings?.api_base_url);
         } catch (error) {
           console.warn("Unable to stop the agent before leaving", error);
         }

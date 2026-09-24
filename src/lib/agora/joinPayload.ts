@@ -278,7 +278,8 @@ export function validateAgentSettings(
     errors.push({
       path: "asr",
       code: "managed_asr_provider_model",
-      message: "Agora managed ASR supports Deepgram nova-2 or nova-3.",
+      message:
+        "Agora managed ASR supports Deepgram nova-2 or nova-3, or Fengming in China.",
     });
   }
 

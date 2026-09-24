@@ -273,7 +273,7 @@ const Controls: React.FC<ControlsProps> = ({
     if (!agentId) return;
     setAgentLoading(true);
     try {
-      await stopAgent(agentId);
+      await stopAgent(agentId, agentSettings?.api_base_url);
       showToast("AI agent stopped", "success");
     } catch (error) {
       console.error("Unable to stop the AI agent", error);
@@ -281,7 +281,7 @@ const Controls: React.FC<ControlsProps> = ({
     } finally {
       clearAgent();
     }
-  }, [agentId, clearAgent, setAgentLoading]);
+  }, [agentId, agentSettings?.api_base_url, clearAgent, setAgentLoading]);
 
   const handleToggleAgent = useCallback(async (): Promise<void> => {
     if (isAgentActive) await handleStopAgent();

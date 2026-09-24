@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildAgoraProjectApiUrl } from "@/lib/agora/apiBaseUrl";
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 const CUSTOMER_ID = process.env.AGORA_CUSTOMER_ID!;
@@ -7,6 +8,7 @@ const CUSTOMER_SECRET = process.env.AGORA_CUSTOMER_SECRET!;
 export async function GET(request: NextRequest) {
   try {
     const agentId = request.nextUrl.searchParams.get("agentId");
+    const apiBaseUrl = request.nextUrl.searchParams.get("apiBaseUrl") ?? undefined;
 
     if (!agentId) {
       return NextResponse.json(
@@ -25,7 +27,11 @@ export async function GET(request: NextRequest) {
     const authHeader = Buffer.from(`${CUSTOMER_ID}:${CUSTOMER_SECRET}`).toString("base64");
 
     const agoraResponse = await fetch(
-      `https://api.agora.io/api/conversational-ai-agent/v2/projects/${APP_ID}/agents/${agentId}`,
+      buildAgoraProjectApiUrl(
+        apiBaseUrl,
+        APP_ID,
+        `/agents/${encodeURIComponent(agentId)}`,
+      ),
       {
         method: "GET",
         headers: {

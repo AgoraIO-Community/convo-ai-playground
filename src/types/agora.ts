@@ -244,6 +244,7 @@ export interface TTSConfig {
 // --- ASR (STT) Vendors ---
 export type ASRVendor =
   | "ares"
+  | "fengming"
   | "microsoft"
   | "deepgram"
   | "gemini"
@@ -259,6 +260,7 @@ export type ASRVendor =
 
 export type ASRApiVendor =
   | "ares"
+  | "fengming"
   | "microsoft"
   | "deepgram"
   | "gemini"
@@ -703,6 +705,8 @@ export interface IAgentTranscription {
 export interface AgentSettings {
   /** Local persisted-settings schema version; never sent to Agora. */
   schemaVersion?: number;
+  /** Upstream Conversational AI REST base used by the application API routes. */
+  api_base_url?: string;
   // Agent name (required, unique identifier)
   name: string;
 
@@ -1020,8 +1024,13 @@ export const TTS_PRESETS: Record<
 
 export const ASR_PRESETS: Record<ASRVendor, VendorPreset> = {
   ares: {
-    label: "Agora ARES (Built-in)",
+    label: "Agora ARES (Global built-in)",
     value: "ares",
+    requiresApiKey: false,
+  },
+  fengming: {
+    label: "Agora Fengming (China managed)",
+    value: "fengming",
     requiresApiKey: false,
   },
   microsoft: {
