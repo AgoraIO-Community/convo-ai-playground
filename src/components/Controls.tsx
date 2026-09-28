@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MdCallEnd,
   MdMic,
@@ -42,6 +42,7 @@ interface ControlsProps {
     onEnd?: () => Promise<string>;
   };
   teacherSession?: TeacherSessionCredentials | null;
+  autoStartAgent?: boolean;
   onTeacherModeToggle?: () => Promise<void>;
   teacherModeLoading?: boolean;
 }
@@ -84,6 +85,7 @@ const Controls: React.FC<ControlsProps> = ({
   experienceMode,
   manualTurnControls,
   teacherSession,
+  autoStartAgent = false,
   onTeacherModeToggle,
   teacherModeLoading = false,
 }) => {
@@ -108,6 +110,7 @@ const Controls: React.FC<ControlsProps> = ({
   const [manualTurnPending, setManualTurnPending] = useState<
     "start" | "end" | null
   >(null);
+  const autoStartAttemptedRef = useRef(false);
 
   const handleManualTurn = useCallback(
     async (kind: "start" | "end") => {
@@ -168,6 +171,7 @@ const Controls: React.FC<ControlsProps> = ({
   }, [isEnding, onEndCall]);
 
   const handleInviteAgent = useCallback(async (): Promise<void> => {
+    if (isAgentActive || isAgentLoading) return;
     if (!localUID || !channelId) {
       showToast("The call is not ready for the agent yet.", "error");
       return;
@@ -262,10 +266,41 @@ const Controls: React.FC<ControlsProps> = ({
     channelId,
     configureRtm,
     experienceMode,
+    isAgentActive,
+    isAgentLoading,
     localUID,
     localUsername,
     setAgentActive,
     setAgentLoading,
+    teacherSession,
+  ]);
+
+  useEffect(() => {
+    if (
+      !autoStartAgent ||
+      autoStartAttemptedRef.current ||
+      experienceMode !== "teacher" ||
+      isAgentActive ||
+      isAgentLoading ||
+      !agentSettings ||
+      !localUID ||
+      !channelId ||
+      !teacherSession
+    ) {
+      return;
+    }
+
+    autoStartAttemptedRef.current = true;
+    void handleInviteAgent();
+  }, [
+    agentSettings,
+    autoStartAgent,
+    channelId,
+    experienceMode,
+    handleInviteAgent,
+    isAgentActive,
+    isAgentLoading,
+    localUID,
     teacherSession,
   ]);
 

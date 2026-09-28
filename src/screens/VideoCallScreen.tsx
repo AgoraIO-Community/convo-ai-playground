@@ -41,6 +41,7 @@ const VideoCallScreen: React.FC = () => {
   const audioMuted = useAppStore((state) => state.audioMuted);
   const videoMuted = useAppStore((state) => state.videoMuted);
   const isAgentActive = useAppStore((state) => state.isAgentActive);
+  const isAgentLoading = useAppStore((state) => state.isAgentLoading);
   const agentId = useAppStore((state) => state.agentId);
   const agentState = useAppStore((state) => state.agentState);
   const agentRtcUid = useAppStore((state) => state.agentRtcUid);
@@ -353,8 +354,10 @@ const VideoCallScreen: React.FC = () => {
                   transcriptionMode={transcriptionMode}
                   avatarVideoTrack={avatarVideoTrack}
                   avatarExpected={
-                    isAgentActive && Boolean(agentSettings?.avatar?.enable)
+                    Boolean(agentSettings?.avatar?.enable) &&
+                    (isAgentLoading || isAgentActive)
                   }
+                  teacherStarting={isAgentLoading}
                   lessonStatus={lessonDirector.status}
                   lessonProgress={lessonDirector.progress}
                   onClearBoard={lessonDirector.cancelLesson}
@@ -440,6 +443,9 @@ const VideoCallScreen: React.FC = () => {
         experienceMode={callExperienceMode}
         teacherSession={
           callExperienceMode === "teacher" ? teacher.session : null
+        }
+        autoStartAgent={
+          teacherModeEnabled && callExperienceMode === "teacher"
         }
         onTeacherModeToggle={
           teacherModeEnabled ? handleTeacherModeToggle : undefined

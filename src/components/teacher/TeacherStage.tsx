@@ -32,6 +32,7 @@ interface TeacherStageProps {
   transcriptionMode: "rtc" | "rtm";
   avatarVideoTrack?: IRemoteVideoTrack | null;
   avatarExpected?: boolean;
+  teacherStarting?: boolean;
   lessonStatus?: TeacherLessonStatus;
   lessonProgress?: TeacherLessonProgress | null;
   onClearBoard?: () => void;
@@ -44,12 +45,16 @@ function statusFor(
   lessonStatus: TeacherLessonStatus,
   lessonProgress: TeacherLessonProgress | null,
   variant: "interactive" | "preview",
+  teacherStarting: boolean,
 ): {
   label: string;
   dot: string;
 } {
   if (variant === "preview") {
     return { label: "Live lesson preview", dot: "bg-cyan-300" };
+  }
+  if (teacherStarting) {
+    return { label: "Connecting teacher", dot: "bg-cyan-300 animate-pulse" };
   }
   if (lessonStatus === "planning") {
     return { label: "Planning lesson", dot: "bg-violet-300 animate-pulse" };
@@ -114,6 +119,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
   transcriptionMode,
   avatarVideoTrack = null,
   avatarExpected = false,
+  teacherStarting = false,
   lessonStatus = "idle",
   lessonProgress = null,
   onClearBoard,
@@ -121,7 +127,13 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
   previewAvatarImageSrc,
 }) => {
   const boardRef = useRef<TeacherBoardHandle>(null);
-  const status = statusFor(teacher, lessonStatus, lessonProgress, variant);
+  const status = statusFor(
+    teacher,
+    lessonStatus,
+    lessonProgress,
+    variant,
+    teacherStarting,
+  );
   const isPreview = variant === "preview";
   const canPlayDemo = !isPreview && !teacher.session?.liveMcpConfigured;
 
@@ -146,7 +158,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
       className={`relative h-full w-full overflow-hidden rounded-[26px] bg-[#020908] p-1.5 shadow-2xl sm:p-2 ${
         isPreview
           ? "min-h-[300px] sm:min-h-[420px]"
-          : "min-h-[420px] sm:min-h-[520px]"
+          : "min-h-0"
       }`}
       aria-label="AI Teacher blackboard"
       data-testid="teacher-stage"
@@ -210,7 +222,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
       )}
 
       <aside
-        className="absolute bottom-4 right-4 z-30 aspect-video w-[clamp(148px,24vw,292px)] overflow-hidden rounded-2xl border border-cyan-200/35 bg-slate-950 shadow-[0_20px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.04)] sm:bottom-5 sm:right-5"
+        className="absolute bottom-4 right-4 z-30 aspect-[4/3] w-[clamp(156px,25vw,320px)] max-w-[46%] overflow-hidden rounded-2xl border border-cyan-200/35 bg-slate-950 shadow-[0_20px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.04)] sm:bottom-5 sm:right-5"
         aria-label="AI teacher picture in picture"
       >
         <TeacherAvatarPiP

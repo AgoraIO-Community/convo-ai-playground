@@ -29,7 +29,7 @@ const Excalidraw = dynamic<ExcalidrawProps>(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-full items-center justify-center bg-[#07110f] text-sm text-cyan-100/60">
+      <div className="flex h-full min-h-0 items-center justify-center bg-[#07110f] text-sm text-cyan-100/60">
         Preparing the blackboard…
       </div>
     ),
@@ -261,7 +261,7 @@ const TeacherBoard = forwardRef<TeacherBoardHandle, TeacherBoardProps>(
 
     return (
       <div
-        className={`teacher-blackboard relative h-full min-h-[360px] w-full overflow-hidden rounded-[22px] border border-cyan-300/25 bg-[#07110f] shadow-[0_24px_80px_rgba(0,0,0,0.42),inset_0_0_60px_rgba(34,211,238,0.035)] ${className}`}
+        className={`teacher-blackboard relative h-full min-h-0 w-full overflow-hidden rounded-[22px] border border-cyan-300/25 bg-[#07110f] shadow-[0_24px_80px_rgba(0,0,0,0.42),inset_0_0_60px_rgba(34,211,238,0.035)] ${className}`}
       >
         <div className="pointer-events-none absolute inset-0 z-[2] rounded-[22px] ring-1 ring-inset ring-white/[0.035]" />
         <Excalidraw

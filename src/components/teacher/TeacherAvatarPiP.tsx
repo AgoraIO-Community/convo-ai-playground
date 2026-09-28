@@ -52,7 +52,8 @@ const TeacherAvatarPiP: React.FC<TeacherAvatarPiPProps> = ({
     const fitVideo = (): void => {
       const video = container.querySelector("video");
       if (!video) return;
-      video.style.objectFit = "cover";
+      video.style.objectFit = "contain";
+      video.style.objectPosition = "center top";
       video.style.width = "100%";
       video.style.height = "100%";
     };
@@ -129,7 +130,7 @@ const TeacherAvatarPiP: React.FC<TeacherAvatarPiPProps> = ({
     <div className="relative h-full w-full overflow-hidden bg-slate-950 text-white">
       <div
         ref={videoContainerRef}
-        className="absolute inset-0 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover"
+        className="absolute inset-0 bg-[radial-gradient(circle_at_50%_25%,rgba(34,211,238,0.09),transparent_52%),#020617] [&_video]:!h-full [&_video]:!w-full [&_video]:!object-contain [&_video]:!object-top"
         aria-label={`${agentName} avatar video`}
       />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/10" />
