@@ -590,9 +590,15 @@ export interface AvatarLemonSliceParams {
   api_key: string;
   agora_uid: string;
   agora_token?: string;
-  /** Publicly accessible portrait image URL. */
+  /** LemonSlice's fixed Agora generic-avatar identifier. */
   avatar_id: string;
+  /** Publicly accessible reference image URL. */
+  agent_image_url: string;
   api_base_url: string;
+  /** Omit to use LemonSlice's current flagship model. */
+  model?: "lite" | "flash" | "pro" | "cwm-1";
+  /** Output video aspect ratio. */
+  aspect_ratio?: "1x1" | "2x3" | "9x16";
   /** Hz — LemonSlice requires 24 kHz by default. */
   sample_rate?: 16000 | 24000 | 48000;
   quality?: "high" | "medium" | "low";

@@ -1,4 +1,9 @@
 import type { AgentSettings } from "@/types/agora";
+import {
+  LEMON_SLICE_AVATAR_ID,
+  LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL,
+  isHttpUrl,
+} from "@/constants/lemonSlice";
 import { migrateAgentSettings } from "./engineConfig";
 import {
   isSupportedManagedASR,
@@ -132,6 +137,41 @@ function buildAdvancedFeatures(
   }) as Record<string, unknown>;
 }
 
+function buildAvatar(settings: AgentSettings): Record<string, unknown> {
+  const avatar = clone(settings.avatar!);
+  if (avatar.vendor === "heygen") {
+    return compact({ ...avatar, vendor: "liveavatar" }) as Record<
+      string,
+      unknown
+    >;
+  }
+  if (avatar.vendor !== "lemonslice") {
+    return compact(avatar) as unknown as Record<string, unknown>;
+  }
+
+  const params = avatar.params as unknown as Record<string, unknown>;
+  const legacyAvatarId = String(params.avatar_id ?? "").trim();
+  const agentImageUrl = String(
+    params.agent_image_url ??
+      (isHttpUrl(legacyAvatarId) ? legacyAvatarId : "") ??
+      LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL,
+  ).trim();
+  const model = String(params.model ?? "").trim();
+
+  return compact({
+    ...avatar,
+    vendor: "generic",
+    params: {
+      ...params,
+      avatar_id: LEMON_SLICE_AVATAR_ID,
+      agent_image_url:
+        agentImageUrl || LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL,
+      model: model || undefined,
+      aspect_ratio: params.aspect_ratio || "1x1",
+    },
+  }) as Record<string, unknown>;
+}
+
 export function buildJoinProperties(
   input: JoinPayloadInput,
 ): Record<string, unknown> {
@@ -188,16 +228,7 @@ export function buildJoinProperties(
     properties.sal = compact(clone(settings.sal));
   }
   if (settings.avatar?.enable) {
-    const vendor =
-      settings.avatar.vendor === "heygen"
-        ? "liveavatar"
-        : settings.avatar.vendor === "lemonslice"
-          ? "generic"
-          : settings.avatar.vendor;
-    properties.avatar = compact({
-      ...clone(settings.avatar),
-      vendor,
-    });
+    properties.avatar = buildAvatar(settings);
   }
 
   return compact(properties) as Record<string, unknown>;

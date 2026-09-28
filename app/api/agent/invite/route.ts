@@ -9,9 +9,10 @@ import type {
 } from "@/types/agora";
 import { ELEVENLABS_DEFAULT_VOICE_ID } from "@/constants/elevenlabsDefaults";
 import {
+  LEMON_SLICE_AVATAR_ID,
+  LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL,
   LEMON_SLICE_DEFAULT_API_BASE_URL,
   LEMON_SLICE_DEFAULT_AREA,
-  LEMON_SLICE_DEFAULT_AVATAR_ID,
   LEMON_SLICE_DEFAULT_QUALITY,
   isHttpUrl,
 } from "@/constants/lemonSlice";
@@ -433,10 +434,13 @@ async function handleCustomPayloadJoin(
       const lemonApiKey = shouldInjectServerKey(params.api_key as string)
         ? (process.env.LEMONSLICE_API_KEY ?? "").trim()
         : String(params.api_key ?? "").trim();
-      const avatarId = String(
-        params.avatar_id ??
+      const legacyAvatarId = String(params.avatar_id ?? "").trim();
+      const agentImageUrl = String(
+        params.agent_image_url ??
+          (isHttpUrl(legacyAvatarId) ? legacyAvatarId : undefined) ??
+          process.env.NEXT_PUBLIC_LEMONSLICE_AGENT_IMAGE_URL ??
           process.env.NEXT_PUBLIC_LEMONSLICE_AVATAR_ID ??
-          LEMON_SLICE_DEFAULT_AVATAR_ID,
+          LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL,
       ).trim();
       const apiBaseUrl = String(
         params.api_base_url ??
@@ -453,11 +457,11 @@ async function handleCustomPayloadJoin(
           { status: 400 },
         );
       }
-      if (!isHttpUrl(avatarId)) {
+      if (!isHttpUrl(agentImageUrl)) {
         return NextResponse.json(
           {
             error:
-              "LemonSlice avatar_id must be a public HTTP(S) image URL.",
+              "LemonSlice agent_image_url must be a public HTTP(S) image URL.",
           },
           { status: 400 },
         );
@@ -470,8 +474,11 @@ async function handleCustomPayloadJoin(
       }
 
       params.api_key = lemonApiKey;
-      params.avatar_id = avatarId;
+      params.avatar_id = LEMON_SLICE_AVATAR_ID;
+      params.agent_image_url = agentImageUrl;
       params.api_base_url = apiBaseUrl;
+      if (!String(params.model ?? "").trim()) delete params.model;
+      params.aspect_ratio ??= "1x1";
       params.sample_rate ??= 24000;
       params.quality ??=
         process.env.NEXT_PUBLIC_LEMONSLICE_QUALITY ??
@@ -1396,7 +1403,10 @@ export async function POST(request: NextRequest) {
         const lemonParams = avatar.params as {
           api_key?: string;
           avatar_id?: string;
+          agent_image_url?: string;
           api_base_url?: string;
+          model?: "lite" | "flash" | "pro" | "cwm-1";
+          aspect_ratio?: "1x1" | "2x3" | "9x16";
           sample_rate?: number;
           quality?: string;
           version?: string;
@@ -1409,10 +1419,13 @@ export async function POST(request: NextRequest) {
             ? ""
             : String(lemonParams.api_key ?? "").trim()) ||
           (process.env.LEMONSLICE_API_KEY ?? "").trim();
-        const lemonAvatarId = String(
-          lemonParams.avatar_id ??
+        const legacyAvatarId = String(lemonParams.avatar_id ?? "").trim();
+        const lemonAgentImageUrl = String(
+          lemonParams.agent_image_url ??
+            (isHttpUrl(legacyAvatarId) ? legacyAvatarId : undefined) ??
+            process.env.NEXT_PUBLIC_LEMONSLICE_AGENT_IMAGE_URL ??
             process.env.NEXT_PUBLIC_LEMONSLICE_AVATAR_ID ??
-            LEMON_SLICE_DEFAULT_AVATAR_ID,
+            LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL,
         ).trim();
         const lemonApiBaseUrl = String(
           lemonParams.api_base_url ??
@@ -1432,11 +1445,11 @@ export async function POST(request: NextRequest) {
             { status: 400 },
           );
         }
-        if (!isHttpUrl(lemonAvatarId)) {
+        if (!isHttpUrl(lemonAgentImageUrl)) {
           return NextResponse.json(
             {
               error:
-                "LemonSlice avatar_id must be a public HTTP(S) image URL.",
+                "LemonSlice agent_image_url must be a public HTTP(S) image URL.",
             },
             { status: 400 },
           );
@@ -1449,8 +1462,12 @@ export async function POST(request: NextRequest) {
         }
 
         avatarParams.api_key = lemonApiKey;
-        avatarParams.avatar_id = lemonAvatarId;
+        avatarParams.avatar_id = LEMON_SLICE_AVATAR_ID;
+        avatarParams.agent_image_url = lemonAgentImageUrl;
         avatarParams.api_base_url = lemonApiBaseUrl;
+        if (lemonParams.model) avatarParams.model = lemonParams.model;
+        else delete avatarParams.model;
+        avatarParams.aspect_ratio = lemonParams.aspect_ratio ?? "1x1";
         avatarParams.sample_rate = lemonParams.sample_rate ?? 24000;
         avatarParams.quality =
           lemonParams.quality ??

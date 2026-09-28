@@ -83,17 +83,13 @@ const TeacherAvatarPiP: React.FC<TeacherAvatarPiPProps> = ({
           src={previewImageSrc}
           alt={`${agentName} AI teacher`}
           fill
-          sizes="(max-width: 640px) 148px, 292px"
-          className="object-cover"
+          sizes="(max-width: 640px) 100px, 148px"
+          className="object-contain object-center"
           priority
         />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/5 to-slate-950/10" />
-        <div className="absolute bottom-2 left-2 right-2 flex items-end justify-between gap-2">
-          <div className="min-w-0 rounded-md bg-slate-950/70 px-2 py-1 backdrop-blur-md">
-            <p className="truncate text-xs font-semibold">{agentName}</p>
-            <p className="text-[10px] text-slate-300">AI teacher</p>
-          </div>
-          <div className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200/20 bg-emerald-400/15 px-2 py-1 text-[10px] font-medium text-emerald-100 backdrop-blur-md">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-slate-950/5" />
+        <div className="absolute bottom-2 right-2">
+          <div className="inline-flex items-center gap-1 rounded-full border border-emerald-200/20 bg-slate-950/65 px-2 py-1 text-[10px] font-medium text-emerald-100 backdrop-blur-md">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 motion-safe:animate-pulse" />
             {stateLabel(agentState)}
           </div>

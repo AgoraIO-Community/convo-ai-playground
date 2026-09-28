@@ -38,6 +38,49 @@ interface TeacherStageProps {
   onClearBoard?: () => void;
   variant?: "interactive" | "preview";
   previewAvatarImageSrc?: string;
+  avatarAspectRatio?: "1x1" | "2x3" | "9x16";
+  avatarPlacement?: "overlay" | "side";
+}
+
+function overlayAvatarFrameClass(
+  aspectRatio: TeacherStageProps["avatarAspectRatio"],
+  compact: boolean,
+): string {
+  if (compact) {
+    return "aspect-[2/3] h-[clamp(148px,24vw,220px)] max-h-[44%] w-auto max-w-[26%]";
+  }
+  if (aspectRatio === "1x1") {
+    return "aspect-square w-[clamp(156px,24vw,300px)] max-w-[42%]";
+  }
+  if (aspectRatio === "2x3") {
+    return "aspect-[2/3] h-[clamp(220px,52vh,440px)] max-h-[72%] w-auto max-w-[38%]";
+  }
+  if (aspectRatio === "9x16") {
+    return "aspect-[9/16] h-[clamp(240px,56vh,460px)] max-h-[74%] w-auto max-w-[34%]";
+  }
+  return "aspect-[4/3] w-[clamp(156px,25vw,320px)] max-w-[46%]";
+}
+
+function sideRailClass(
+  aspectRatio: TeacherStageProps["avatarAspectRatio"],
+): string {
+  if (aspectRatio === "9x16") {
+    return "lg:w-[clamp(150px,15vw,220px)]";
+  }
+  if (aspectRatio === "2x3") {
+    return "lg:w-[clamp(170px,17vw,250px)]";
+  }
+  return "lg:w-[clamp(200px,20vw,290px)]";
+}
+
+function sideAvatarFrameClass(
+  aspectRatio: TeacherStageProps["avatarAspectRatio"],
+): string {
+  const sizing = "h-full max-w-full lg:h-auto lg:w-full";
+  if (aspectRatio === "1x1") return `aspect-square ${sizing}`;
+  if (aspectRatio === "2x3") return `aspect-[2/3] ${sizing}`;
+  if (aspectRatio === "9x16") return `aspect-[9/16] ${sizing}`;
+  return `aspect-[4/3] ${sizing}`;
 }
 
 function statusFor(
@@ -125,6 +168,8 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
   onClearBoard,
   variant = "interactive",
   previewAvatarImageSrc,
+  avatarAspectRatio,
+  avatarPlacement = "overlay",
 }) => {
   const boardRef = useRef<TeacherBoardHandle>(null);
   const status = statusFor(
@@ -135,6 +180,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
     teacherStarting,
   );
   const isPreview = variant === "preview";
+  const showAvatarBesideBoard = avatarPlacement === "side" && !isPreview;
   const canPlayDemo = !isPreview && !teacher.session?.liveMcpConfigured;
 
   const handlePlayDemo = useCallback(() => {
@@ -153,9 +199,26 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
     teacher.clearBoard();
   }, [onClearBoard, teacher]);
 
+  const avatar = (
+    <TeacherAvatarPiP
+      active={active}
+      agentId={agentId}
+      agentName={agentName}
+      agentState={agentState}
+      transcriptionMode={transcriptionMode}
+      videoTrack={avatarVideoTrack}
+      avatarExpected={avatarExpected}
+      previewImageSrc={previewAvatarImageSrc}
+    />
+  );
+
   return (
     <section
-      className={`relative h-full w-full overflow-hidden rounded-[26px] bg-[#020908] p-1.5 shadow-2xl sm:p-2 ${
+      className={`relative flex h-full w-full min-h-0 ${
+        showAvatarBesideBoard
+          ? "flex-col gap-2 overflow-hidden lg:flex-row lg:gap-3"
+          : "overflow-hidden"
+      } ${
         isPreview
           ? "min-h-[300px] sm:min-h-[420px]"
           : "min-h-0"
@@ -164,78 +227,86 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
       data-testid="teacher-stage"
       data-teacher-elements={Object.keys(teacher.boardState.elements).length}
     >
-      <TeacherBoard
-        ref={boardRef}
-        state={teacher.boardState}
-        animation={teacher.activeAnimation}
-        active={active}
-      />
-
-      <div className="pointer-events-none absolute left-5 top-5 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-slate-100 shadow-lg backdrop-blur-xl sm:left-6 sm:top-6">
-        <MdSchool className="text-base text-cyan-300" />
-        AI Teacher
-      </div>
-
-      <div
-        className="absolute right-5 top-5 z-20 inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-[11px] font-medium text-slate-200 shadow-lg backdrop-blur-xl sm:right-6 sm:top-6 sm:text-xs"
-        aria-live="polite"
-      >
-        <span
-          className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${status.dot}`}
-        />
-        {status.label}
-      </div>
-
-      {!isPreview && (
-        <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 sm:bottom-5 sm:left-5">
-          {canPlayDemo && (
-            <button
-              type="button"
-              onClick={handlePlayDemo}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-cyan-200/20 bg-slate-950/80 px-3 text-xs font-semibold text-cyan-50 shadow-lg backdrop-blur-xl transition hover:border-cyan-200/40 hover:bg-slate-900/90 focus:outline-none focus:ring-2 focus:ring-cyan-300"
-            >
-              <MdPlayArrow className="text-base" />
-              Play demo lesson
-            </button>
-          )}
-          {teacher.connection === "demo" && (
-            <button
-              type="button"
-              onClick={handlePauseDemo}
-              className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-slate-950/80 text-slate-200 shadow-lg backdrop-blur-xl transition hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-300"
-              aria-label="Pause demo lesson"
-              title="Pause demo lesson"
-            >
-              <MdPause />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={handleClear}
-            className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-slate-950/80 text-slate-300 shadow-lg backdrop-blur-xl transition hover:bg-slate-900 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300"
-            aria-label="Clear blackboard"
-            title="Clear blackboard"
-          >
-            <MdDeleteOutline />
-          </button>
-        </div>
-      )}
-
-      <aside
-        className="absolute bottom-4 right-4 z-30 aspect-[4/3] w-[clamp(156px,25vw,320px)] max-w-[46%] overflow-hidden rounded-2xl border border-cyan-200/35 bg-slate-950 shadow-[0_20px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.04)] sm:bottom-5 sm:right-5"
-        aria-label="AI teacher picture in picture"
-      >
-        <TeacherAvatarPiP
+      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[26px] bg-[#020908] p-1.5 shadow-2xl sm:p-2">
+        <TeacherBoard
+          ref={boardRef}
+          state={teacher.boardState}
+          animation={teacher.activeAnimation}
           active={active}
-          agentId={agentId}
-          agentName={agentName}
-          agentState={agentState}
-          transcriptionMode={transcriptionMode}
-          videoTrack={avatarVideoTrack}
-          avatarExpected={avatarExpected}
-          previewImageSrc={previewAvatarImageSrc}
         />
-      </aside>
+
+        <div className="pointer-events-none absolute left-5 top-5 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-slate-100 shadow-lg backdrop-blur-xl sm:left-6 sm:top-6">
+          <MdSchool className="text-base text-cyan-300" />
+          AI Teacher
+        </div>
+
+        <div
+          className="absolute right-5 top-5 z-20 inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-[11px] font-medium text-slate-200 shadow-lg backdrop-blur-xl sm:right-6 sm:top-6 sm:text-xs"
+          aria-live="polite"
+        >
+          <span
+            className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${status.dot}`}
+          />
+          {status.label}
+        </div>
+
+        {!isPreview && (
+          <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 sm:bottom-5 sm:left-5">
+            {canPlayDemo && (
+              <button
+                type="button"
+                onClick={handlePlayDemo}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-cyan-200/20 bg-slate-950/80 px-3 text-xs font-semibold text-cyan-50 shadow-lg backdrop-blur-xl transition hover:border-cyan-200/40 hover:bg-slate-900/90 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+              >
+                <MdPlayArrow className="text-base" />
+                Play demo lesson
+              </button>
+            )}
+            {teacher.connection === "demo" && (
+              <button
+                type="button"
+                onClick={handlePauseDemo}
+                className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-slate-950/80 text-slate-200 shadow-lg backdrop-blur-xl transition hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                aria-label="Pause demo lesson"
+                title="Pause demo lesson"
+              >
+                <MdPause />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleClear}
+              className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-slate-950/80 text-slate-300 shadow-lg backdrop-blur-xl transition hover:bg-slate-900 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300"
+              aria-label="Clear blackboard"
+              title="Clear blackboard"
+            >
+              <MdDeleteOutline />
+            </button>
+          </div>
+        )}
+
+        {!showAvatarBesideBoard && (
+          <aside
+            className={`absolute bottom-4 right-4 z-30 overflow-hidden rounded-2xl border border-cyan-200/35 bg-slate-950 shadow-[0_20px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.04)] sm:bottom-5 sm:right-5 ${overlayAvatarFrameClass(avatarAspectRatio, isPreview)}`}
+            aria-label="AI teacher picture in picture"
+          >
+            {avatar}
+          </aside>
+        )}
+      </div>
+
+      {showAvatarBesideBoard && (
+        <aside
+          className={`flex h-[132px] w-full shrink-0 items-end justify-end lg:h-full ${sideRailClass(avatarAspectRatio)}`}
+          aria-label="AI teacher video panel"
+        >
+          <div
+            className={`overflow-hidden rounded-2xl border border-cyan-200/35 bg-slate-950 shadow-[0_20px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.04)] ${sideAvatarFrameClass(avatarAspectRatio)}`}
+          >
+            {avatar}
+          </div>
+        </aside>
+      )}
     </section>
   );
 };

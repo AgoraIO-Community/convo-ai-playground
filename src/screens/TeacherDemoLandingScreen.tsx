@@ -199,10 +199,10 @@ const TeacherDemoLandingScreen: React.FC<TeacherDemoLandingScreenProps> = ({
                 active
                 variant="preview"
                 teacher={teacher}
-                agentName="Maya"
+                agentName="Emma"
                 agentState={EAgentState.SPEAKING}
                 transcriptionMode="rtm"
-                previewAvatarImageSrc="/images/ai-teacher-maya.jpg"
+                previewAvatarImageSrc="/images/ai-teacher-maya-lemonslice-seated.jpg"
               />
             </div>
             <div className="mt-4 grid grid-cols-3 gap-2 text-[10px] uppercase tracking-[0.16em] text-slate-600 sm:text-xs">

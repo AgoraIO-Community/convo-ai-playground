@@ -18,6 +18,7 @@ import { useTeacherBoardSession } from "@/hooks/useTeacherBoardSession";
 import { useTeacherLessonDirector } from "@/hooks/useTeacherLessonDirector";
 import { showToast } from "@/services/uiService";
 import useAppStore from "@/store/useAppStore";
+import type { AvatarLemonSliceParams } from "@/types/agora";
 import type {
   CallExperienceMode,
   StandardCallExperienceMode,
@@ -68,6 +69,11 @@ const VideoCallScreen: React.FC = () => {
   const didApplyTeacherDefaultRef = useRef(false);
   const [isModeChanging, setIsModeChanging] = useState(false);
   const isEndingRef = useRef(false);
+  const avatarAspectRatio =
+    agentSettings?.avatar?.vendor === "lemonslice"
+      ? ((agentSettings.avatar.params as AvatarLemonSliceParams)
+          .aspect_ratio ?? "1x1")
+      : undefined;
 
   const {
     leaveCall,
@@ -358,6 +364,8 @@ const VideoCallScreen: React.FC = () => {
                     (isAgentLoading || isAgentActive)
                   }
                   teacherStarting={isAgentLoading}
+                  avatarAspectRatio={avatarAspectRatio}
+                  avatarPlacement="side"
                   lessonStatus={lessonDirector.status}
                   lessonProgress={lessonDirector.progress}
                   onClearBoard={lessonDirector.cancelLesson}

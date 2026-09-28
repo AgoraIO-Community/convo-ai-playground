@@ -51,7 +51,7 @@ export default function TeacherPreviewScreen() {
               active
               teacher={teacher}
               agentId="prototype-agent"
-              agentName="Maya"
+              agentName="Emma"
               agentState={EAgentState.SPEAKING}
               transcriptionMode="rtm"
             />

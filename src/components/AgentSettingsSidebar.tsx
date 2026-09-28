@@ -48,10 +48,14 @@ import {
   ANAM_DEFAULT_AVATAR_ID,
 } from "@/constants/anamAvatars";
 import {
+  LEMON_SLICE_ASPECT_RATIO_OPTIONS,
+  LEMON_SLICE_AVATAR_ID,
+  LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL,
   LEMON_SLICE_DEFAULT_API_BASE_URL,
   LEMON_SLICE_DEFAULT_AREA,
-  LEMON_SLICE_DEFAULT_AVATAR_ID,
   LEMON_SLICE_DEFAULT_QUALITY,
+  LEMON_SLICE_MODEL_OPTIONS,
+  isHttpUrl,
 } from "@/constants/lemonSlice";
 import ElevenLabsVoicePicker from "@/components/ElevenLabsVoicePicker";
 import { ELEVENLABS_DEFAULT_VOICE_ID } from "@/constants/elevenlabsDefaults";
@@ -89,6 +93,8 @@ const ENV_MAP: Record<string, string | undefined> = {
   HEYGEN_AVATAR_ID: process.env.NEXT_PUBLIC_HEYGEN_AVATAR_ID,
   HEYGEN_QUALITY: process.env.NEXT_PUBLIC_HEYGEN_QUALITY,
   ANAM_AVATAR_ID: process.env.NEXT_PUBLIC_ANAM_AVATAR_ID,
+  LEMONSLICE_AGENT_IMAGE_URL:
+    process.env.NEXT_PUBLIC_LEMONSLICE_AGENT_IMAGE_URL,
   LEMONSLICE_AVATAR_ID: process.env.NEXT_PUBLIC_LEMONSLICE_AVATAR_ID,
   LEMONSLICE_API_BASE_URL:
     process.env.NEXT_PUBLIC_LEMONSLICE_API_BASE_URL,
@@ -292,9 +298,11 @@ const getDefaultAvatarParams = (
       return {
         api_key: "",
         agora_uid: "",
-        avatar_id:
+        avatar_id: LEMON_SLICE_AVATAR_ID,
+        agent_image_url:
+          getEnvVar("LEMONSLICE_AGENT_IMAGE_URL") ||
           getEnvVar("LEMONSLICE_AVATAR_ID") ||
-          LEMON_SLICE_DEFAULT_AVATAR_ID,
+          LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL,
         api_base_url:
           getEnvVar("LEMONSLICE_API_BASE_URL") ||
           LEMON_SLICE_DEFAULT_API_BASE_URL,
@@ -306,6 +314,7 @@ const getDefaultAvatarParams = (
         version: "v1",
         video_encoding: "H264",
         activity_idle_timeout: 120,
+        aspect_ratio: "1x1",
         area:
           getEnvVar("LEMONSLICE_AREA", LEMON_SLICE_DEFAULT_AREA) ||
           LEMON_SLICE_DEFAULT_AREA,
@@ -1753,18 +1762,45 @@ const AgentSettingsSidebar: React.FC<AgentSettingsSidebarProps> = ({
                   label="Public image URL"
                   required
                   hint="Use an existing publicly accessible portrait image; no upload is required."
-                  tooltip="This HTTP(S) URL is sent as avatar_id to Agora's generic avatar vendor."
+                  tooltip="This HTTP(S) URL is sent to LemonSlice as agent_image_url."
                 >
                   <Input
                     type="url"
                     value={
-                      getAvatarParam("avatar_id") ||
-                      LEMON_SLICE_DEFAULT_AVATAR_ID
+                      getAvatarParam("agent_image_url") ||
+                      (isHttpUrl(getAvatarParam("avatar_id"))
+                        ? getAvatarParam("avatar_id")
+                        : "") ||
+                      LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL
                     }
                     onChange={(e) =>
-                      setAvatarParam("avatar_id", e.target.value)
+                      setAvatarParam("agent_image_url", e.target.value)
                     }
                     placeholder="https://example.com/avatar.jpg"
+                  />
+                </FormField>
+                <FormField
+                  label="Avatar model"
+                  hint="Default leaves the model unset and uses LemonSlice's flagship model."
+                >
+                  <CustomSelect
+                    value={getAvatarParam("model")}
+                    onChange={(value) =>
+                      setAvatarParam("model", value || undefined)
+                    }
+                    options={[...LEMON_SLICE_MODEL_OPTIONS]}
+                  />
+                </FormField>
+                <FormField
+                  label="Output aspect ratio"
+                  hint="1:1 fits the compact teacher tile without side bars."
+                >
+                  <CustomSelect
+                    value={getAvatarParam("aspect_ratio") || "1x1"}
+                    onChange={(value) =>
+                      setAvatarParam("aspect_ratio", value)
+                    }
+                    options={[...LEMON_SLICE_ASPECT_RATIO_OPTIONS]}
                   />
                 </FormField>
                 <FormField
