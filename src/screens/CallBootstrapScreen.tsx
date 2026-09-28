@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import { createRtcSession } from "@/api/agoraApi";
+import MeetingLoadingSkeleton from "@/components/MeetingLoadingSkeleton";
+import { isAiTeacherModeEnabled } from "@/constants/featureFlags";
 import { useAgora } from "@/hooks/useAgora";
 import { getTranscriptTransport } from "@/lib/agora/transcriptTransport";
 import useAppStore from "@/store/useAppStore";
@@ -14,6 +16,7 @@ import VideoCallScreen from "@/screens/VideoCallScreen";
 type BootstrapStatus = "landing" | "joining" | "active" | "error";
 
 const CallBootstrapScreen: React.FC = () => {
+  const teacherModeEnabled = isAiTeacherModeEnabled();
   const callActive = useAppStore((state) => state.callActive);
   const callStart = useAppStore((state) => state.callStart);
   const agentSettings = useAppStore((state) => state.agentSettings);
@@ -21,7 +24,7 @@ const CallBootstrapScreen: React.FC = () => {
   const hasStartedRef = useRef(false);
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<BootstrapStatus>(
-    callActive ? "active" : "landing",
+    callActive ? "active" : teacherModeEnabled ? "landing" : "joining",
   );
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -81,16 +84,48 @@ const CallBootstrapScreen: React.FC = () => {
   }, []);
 
   if (status === "active") return <VideoCallScreen />;
-  const landingPhase: TeacherLandingPhase = status;
+  if (teacherModeEnabled) {
+    const landingPhase: TeacherLandingPhase = status;
+    return (
+      <TeacherDemoLandingScreen
+        phase={landingPhase}
+        errorMessage={errorMessage}
+        onEnter={handleEnter}
+        onRetry={handleRetry}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+  if (status === "joining") return <MeetingLoadingSkeleton />;
 
   return (
-    <TeacherDemoLandingScreen
-      phase={landingPhase}
-      errorMessage={errorMessage}
-      onEnter={handleEnter}
-      onRetry={handleRetry}
-      onSignOut={handleSignOut}
-    />
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
+      <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 text-center shadow-2xl">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">
+          Call setup failed
+        </p>
+        <h1 className="mt-3 text-2xl font-semibold">
+          We could not connect your call
+        </h1>
+        <p className="mt-3 text-sm text-slate-300">{errorMessage}</p>
+        <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="rounded-full bg-cyan-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300"
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="rounded-full border border-white/20 px-5 py-3 font-semibold text-white transition hover:bg-white/10"
+          >
+            Sign out
+          </button>
+        </div>
+      </section>
+    </main>
   );
 };
 

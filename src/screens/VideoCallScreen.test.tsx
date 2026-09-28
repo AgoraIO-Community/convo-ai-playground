@@ -72,10 +72,12 @@ vi.mock("@/components/Controls", () => ({
     onTeacherModeToggle,
   }: {
     experienceMode: string;
-    onTeacherModeToggle: () => void;
+    onTeacherModeToggle?: () => void;
   }) => (
     <div data-testid="controls" data-experience-mode={experienceMode}>
-      <button onClick={onTeacherModeToggle}>Toggle Teacher Mode</button>
+      {onTeacherModeToggle ? (
+        <button onClick={onTeacherModeToggle}>Toggle Teacher Mode</button>
+      ) : null}
     </div>
   ),
 }));
@@ -95,6 +97,7 @@ import VideoCallScreen from "./VideoCallScreen";
 
 describe("VideoCallScreen transcript transport", () => {
   beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_AI_TEACHER_MODE", "true");
     vi.clearAllMocks();
     mocks.leaveCall.mockResolvedValue(undefined);
     mocks.setLocalVideoEnabled.mockResolvedValue(undefined);
@@ -113,6 +116,22 @@ describe("VideoCallScreen transcript transport", () => {
       transcriptionMode: "rtm",
       sessionStartTime: null,
     });
+  });
+
+  it("starts in the standard playground without teacher controls when Teacher Mode is disabled", () => {
+    vi.stubEnv("NEXT_PUBLIC_AI_TEACHER_MODE", "false");
+
+    render(<VideoCallScreen />);
+
+    expect(screen.getByTestId("voice-agent-stage")).toBeInTheDocument();
+    expect(screen.queryByTestId("teacher-stage")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Toggle Teacher Mode" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("controls")).toHaveAttribute(
+      "data-experience-mode",
+      "voice",
+    );
   });
 
   it("shows RTM connectivity and enables chat in RTM mode", async () => {

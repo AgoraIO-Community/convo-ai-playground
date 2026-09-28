@@ -36,6 +36,10 @@ vi.mock("@/screens/VideoCallScreen", () => ({
   default: () => null,
 }));
 
+vi.mock("@/components/MeetingLoadingSkeleton", () => ({
+  default: () => React.createElement("p", null, "Preparing normal call"),
+}));
+
 vi.mock("@/screens/TeacherDemoLandingScreen", () => ({
   default: ({
     phase,
@@ -80,6 +84,7 @@ const rtcSession: RtcSessionResponse = {
 
 describe("CallBootstrapScreen", () => {
   beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_AI_TEACHER_MODE", "true");
     mocks.createRtcSession.mockReset();
     mocks.joinMeeting.mockReset();
     mocks.callStart.mockReset();
@@ -90,6 +95,19 @@ describe("CallBootstrapScreen", () => {
     };
     mocks.createRtcSession.mockResolvedValue(rtcSession);
     mocks.joinMeeting.mockResolvedValue(undefined);
+  });
+
+  it("starts the normal playground immediately when Teacher Mode is disabled", async () => {
+    vi.stubEnv("NEXT_PUBLIC_AI_TEACHER_MODE", "false");
+
+    render(React.createElement(CallBootstrapScreen));
+
+    expect(screen.getByText("Preparing normal call")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Enter classroom" }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.joinMeeting).toHaveBeenCalledTimes(1));
+    expect(mocks.createRtcSession).toHaveBeenCalledTimes(1);
   });
 
   it("creates and joins one session under React Strict Mode", async () => {

@@ -11,6 +11,7 @@ import TranscriptDrawer from "@/components/TranscriptDrawer";
 import TranscriptSidePanel from "@/components/TranscriptSidePanel";
 import VideoTile from "@/components/VideoTile";
 import VoiceAgentStage from "@/components/VoiceAgentStage";
+import { isAiTeacherModeEnabled } from "@/constants/featureFlags";
 import { useAgora } from "@/hooks/useAgora";
 import { useConversationalAI } from "@/hooks/useConversationalAI";
 import { useTeacherBoardSession } from "@/hooks/useTeacherBoardSession";
@@ -32,6 +33,7 @@ function formatRemaining(milliseconds: number): string {
 }
 
 const VideoCallScreen: React.FC = () => {
+  const teacherModeEnabled = isAiTeacherModeEnabled();
   const router = useRouter();
   const localUsername = useAppStore((state) => state.localUsername);
   const localUID = useAppStore((state) => state.localUID);
@@ -52,7 +54,13 @@ const VideoCallScreen: React.FC = () => {
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const initialVideoMutedRef = useRef(videoMuted);
   const [callExperienceMode, setCallExperienceMode] =
-    useState<CallExperienceMode>("teacher");
+    useState<CallExperienceMode>(() =>
+      teacherModeEnabled
+        ? "teacher"
+        : initialVideoMutedRef.current
+          ? "voice"
+          : "video",
+    );
   const previousNonTeacherModeRef = useRef<StandardCallExperienceMode>(
     initialVideoMutedRef.current ? "voice" : "video",
   );
@@ -70,12 +78,12 @@ const VideoCallScreen: React.FC = () => {
   } = useAgora();
 
   useEffect(() => {
-    if (didApplyTeacherDefaultRef.current) return;
+    if (!teacherModeEnabled || didApplyTeacherDefaultRef.current) return;
     didApplyTeacherDefaultRef.current = true;
     void setLocalVideoEnabled(false).catch(() => {
       showToast("Camera could not be disabled for Teacher Mode.", "error");
     });
-  }, [setLocalVideoEnabled]);
+  }, [setLocalVideoEnabled, teacherModeEnabled]);
 
   const { sendChatMessage, manualSOS, manualEOS } = useConversationalAI({
     rtcClient,
@@ -85,7 +93,9 @@ const VideoCallScreen: React.FC = () => {
     transcriptionMode,
     agentRtcUid,
   });
-  const teacher = useTeacherBoardSession(agentState);
+  const teacher = useTeacherBoardSession(agentState, {
+    connectRemote: teacherModeEnabled,
+  });
   const pauseTeacherDemo = teacher.pauseDemo;
   const lessonDirector = useTeacherLessonDirector({
     active: callExperienceMode === "teacher" && isAgentActive,
@@ -324,32 +334,34 @@ const VideoCallScreen: React.FC = () => {
 
       <div className="flex min-h-0 flex-1">
         <main className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden">
-          <div
-            className={`absolute inset-3 z-10 sm:inset-5 ${
-              callExperienceMode === "teacher"
-                ? "visible pointer-events-auto"
-                : "invisible pointer-events-none"
-            }`}
-            aria-hidden={callExperienceMode !== "teacher"}
-          >
-            <div className="mx-auto h-full w-full max-w-7xl">
-              <TeacherStage
-                active={callExperienceMode === "teacher"}
-                teacher={teacher}
-                agentId={agentId}
-                agentName={agentSettings?.name || "AI Agent"}
-                agentState={agentState}
-                transcriptionMode={transcriptionMode}
-                avatarVideoTrack={avatarVideoTrack}
-                avatarExpected={
-                  isAgentActive && Boolean(agentSettings?.avatar?.enable)
-                }
-                lessonStatus={lessonDirector.status}
-                lessonProgress={lessonDirector.progress}
-                onClearBoard={lessonDirector.cancelLesson}
-              />
+          {teacherModeEnabled ? (
+            <div
+              className={`absolute inset-3 z-10 sm:inset-5 ${
+                callExperienceMode === "teacher"
+                  ? "visible pointer-events-auto"
+                  : "invisible pointer-events-none"
+              }`}
+              aria-hidden={callExperienceMode !== "teacher"}
+            >
+              <div className="mx-auto h-full w-full max-w-7xl">
+                <TeacherStage
+                  active={callExperienceMode === "teacher"}
+                  teacher={teacher}
+                  agentId={agentId}
+                  agentName={agentSettings?.name || "AI Agent"}
+                  agentState={agentState}
+                  transcriptionMode={transcriptionMode}
+                  avatarVideoTrack={avatarVideoTrack}
+                  avatarExpected={
+                    isAgentActive && Boolean(agentSettings?.avatar?.enable)
+                  }
+                  lessonStatus={lessonDirector.status}
+                  lessonProgress={lessonDirector.progress}
+                  onClearBoard={lessonDirector.cancelLesson}
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div
             className={`flex h-full w-full items-center justify-center overflow-y-auto p-3 sm:p-5 ${
@@ -429,7 +441,9 @@ const VideoCallScreen: React.FC = () => {
         teacherSession={
           callExperienceMode === "teacher" ? teacher.session : null
         }
-        onTeacherModeToggle={handleTeacherModeToggle}
+        onTeacherModeToggle={
+          teacherModeEnabled ? handleTeacherModeToggle : undefined
+        }
         teacherModeLoading={isModeChanging}
         manualTurnControls={
           isAgentActive &&
