@@ -1,6 +1,7 @@
 import type { AgentSettings, TurnDetectionConfig } from "@/types/agora";
 
 export const AI_TEACHER_DEFAULT_MODEL = "gpt-5.6-terra";
+export const AI_TEACHER_DIRECTOR_DEFAULT_MODEL = "gpt-6-sol";
 const OPENAI_CHAT_COMPLETIONS_URL =
   "https://api.openai.com/v1/chat/completions";
 
@@ -25,6 +26,10 @@ export const AI_TEACHER_FAILURE_MESSAGE =
   "I hit a temporary model error while preparing that explanation. Please ask again in a moment.";
 
 export const AI_TEACHER_MAX_HISTORY = 64;
+
+export function getAiTeacherLearnerName(displayName: string): string {
+  return displayName.trim().split(/\s+/)[0] || "Guest";
+}
 
 export const AI_TEACHER_AGENT_LLM_PARAMS = {
   model: AI_TEACHER_DEFAULT_MODEL,
@@ -54,8 +59,20 @@ export const AI_TEACHER_TURN_DETECTION: TurnDetectionConfig = {
 export function withAiTeacherRuntimeDefaults(
   settings: AgentSettings,
 ): AgentSettings {
+  const teacherAvatar =
+    settings.avatar?.vendor === "lemonslice"
+      ? {
+          ...settings.avatar,
+          params: {
+            ...settings.avatar.params,
+            aspect_ratio: "2x3" as const,
+          },
+        }
+      : settings.avatar;
+
   return {
     ...settings,
+    avatar: teacherAvatar,
     llm: {
       credential_mode: "byok",
       vendor: "openai",

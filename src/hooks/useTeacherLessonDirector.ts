@@ -118,6 +118,16 @@ function normalizeLearnerText(value: string): string {
     .trim();
 }
 
+function isUnfinishedQuestionStem(value: string): boolean {
+  const normalized = normalizeLearnerText(value);
+  return (
+    /^(?:how|what|why|when|where|who|which)\s+(?:do|does|did|is|are|was|were|can|could|would|will|should|has|have|had)$/.test(
+      normalized,
+    ) ||
+    /^(?:can|could|would|will|should)\s+you$/.test(normalized)
+  );
+}
+
 function areEquivalentTurns(left: string, right: string): boolean {
   if (left === right) return true;
   if (!left || !right) return false;
@@ -268,7 +278,7 @@ export function useTeacherLessonDirector(
   const generationRef = useRef(0);
   const activeKindRef = useRef<ActiveLessonKind>(null);
   const mainFrameRef = useRef<LessonFrame | null>(null);
-  const seenVoiceTurnsRef = useRef(new Set<string>());
+  const seenVoiceTurnsRef = useRef(new Map<string, string>());
   const seenVoiceActivityRef = useRef(new Set<string>());
   const pendingVoiceRef = useRef<{ text: string; fingerprint: string } | null>(
     null,
@@ -488,9 +498,18 @@ export function useTeacherLessonDirector(
   const handleExecutionError = useCallback(
     (error: unknown, generation: number): void => {
       if (isAbortError(error) || generation !== generationRef.current) return;
-      console.error("[teacher-director] lesson execution failed", {
+      const details = {
         category: error instanceof Error ? error.name : "UnknownError",
-      });
+        message: error instanceof Error ? error.message : "Unknown error",
+        ...(error instanceof TeacherLessonRequestError && {
+          status: error.status,
+        }),
+      };
+      if (error instanceof TeacherLessonRequestError) {
+        console.warn("[teacher-director] lesson request failed", details);
+      } else {
+        console.error("[teacher-director] lesson execution failed", details);
+      }
       setStatus(
         error instanceof TeacherLessonRequestError && error.status === 503
           ? "unavailable"
@@ -780,7 +799,10 @@ export function useTeacherLessonDirector(
       for (const item of options.transcriptItems) {
         if (localId && item.uid === localId) {
           const physicalKey = `${item.stream_id}:${item.turn_id}`;
-          seenVoiceTurnsRef.current.add(physicalKey);
+          seenVoiceTurnsRef.current.set(
+            physicalKey,
+            normalizeLearnerText(item.text),
+          );
           seenVoiceActivityRef.current.add(physicalKey);
         }
       }
@@ -797,8 +819,11 @@ export function useTeacherLessonDirector(
           return false;
         }
         const physicalKey = `${item.stream_id}:${item.turn_id}`;
-        if (seenVoiceTurnsRef.current.has(physicalKey)) return false;
-        seenVoiceTurnsRef.current.add(physicalKey);
+        const normalized = normalizeLearnerText(item.text);
+        if (seenVoiceTurnsRef.current.get(physicalKey) === normalized) {
+          return false;
+        }
+        seenVoiceTurnsRef.current.set(physicalKey, normalized);
         return true;
       })
       .sort((left, right) => left._time - right._time);
@@ -818,6 +843,12 @@ export function useTeacherLessonDirector(
       const pending = pendingVoiceRef.current;
       pendingVoiceRef.current = null;
       if (!pending || !optionsRef.current.active) return;
+      if (isUnfinishedQuestionStem(pending.text)) {
+        console.info("[teacher-director] waiting for voice turn completion", {
+          fingerprint: pending.fingerprint,
+        });
+        return;
+      }
       console.info("[teacher-director] voice turn stabilized", {
         fingerprint: pending.fingerprint,
       });

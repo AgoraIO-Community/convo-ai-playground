@@ -10,6 +10,9 @@ const MAX_CUES = 10;
 const MAX_OPERATIONS_PER_CUE = 16;
 const MAX_TOTAL_OPERATIONS = 64;
 const MAX_SPEECH_BYTES = 450;
+const MIN_LESSON_FONT_SIZE = 28;
+const DEFAULT_LESSON_FONT_SIZE = 30;
+const ELEMENT_GAP = 18;
 
 const lessonWireSchema = z
   .object({
@@ -49,6 +52,182 @@ export interface TeacherLessonPlanStats {
   connectorOperations: number;
   textOperations: number;
   operationTypes: Record<string, number>;
+}
+
+interface VisualBounds {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function textBounds(
+  id: string,
+  x: number,
+  y: number,
+  text: string,
+  fontSize: number,
+): VisualBounds {
+  const lines = text.split("\n");
+  const longestLine = Math.max(...lines.map((line) => line.length), 1);
+  return {
+    id,
+    x,
+    y,
+    width: Math.max(80, longestLine * fontSize * 0.58),
+    height: Math.max(fontSize * 1.35, lines.length * fontSize * 1.35),
+  };
+}
+
+function overlaps(left: VisualBounds, right: VisualBounds): boolean {
+  return (
+    left.x < right.x + right.width + ELEMENT_GAP &&
+    left.x + left.width + ELEMENT_GAP > right.x &&
+    left.y < right.y + right.height + ELEMENT_GAP &&
+    left.y + left.height + ELEMENT_GAP > right.y
+  );
+}
+
+export function normalizeTeacherLessonLayout(
+  plan: TeacherLessonPlan,
+): TeacherLessonPlan {
+  const bounds = new Map<string, VisualBounds>();
+
+  return {
+    ...plan,
+    cues: plan.cues.map((cue) => ({
+      ...cue,
+      boardActions: cue.boardActions.map((operation) => {
+        if (
+          operation.type === "clear_board" ||
+          operation.type === "clear_ai_elements"
+        ) {
+          bounds.clear();
+          return operation;
+        }
+        if (operation.type === "delete_element") {
+          bounds.delete(operation.elementId);
+          return operation;
+        }
+        if (operation.type === "add_text") {
+          const fontSize = Math.max(
+            operation.fontSize ?? DEFAULT_LESSON_FONT_SIZE,
+            MIN_LESSON_FONT_SIZE,
+          );
+          let candidate = textBounds(
+            operation.elementId,
+            operation.x,
+            operation.y,
+            operation.text,
+            fontSize,
+          );
+
+          while (true) {
+            const conflicts = [...bounds.values()].filter((placed) =>
+              overlaps(candidate, placed),
+            );
+            if (conflicts.length === 0) break;
+            candidate = {
+              ...candidate,
+              y: Math.ceil(
+                Math.max(
+                  ...conflicts.map(
+                    (placed) => placed.y + placed.height + ELEMENT_GAP,
+                  ),
+                ),
+              ),
+            };
+          }
+
+          bounds.set(operation.elementId, candidate);
+          return {
+            ...operation,
+            y: candidate.y,
+            fontSize,
+          };
+        }
+        if (operation.type === "update_element") {
+          const current = bounds.get(operation.elementId);
+          if (current) {
+            bounds.set(operation.elementId, {
+              ...current,
+              x: operation.patch.x ?? current.x,
+              y: operation.patch.y ?? current.y,
+              width: operation.patch.width ?? current.width,
+              height: operation.patch.height ?? current.height,
+            });
+          }
+        }
+        return operation;
+      }),
+    })),
+  };
+}
+
+function assertReadableLayout(plan: TeacherLessonPlan): void {
+  const bounds = new Map<string, VisualBounds>();
+
+  for (const operation of plan.cues.flatMap((cue) => cue.boardActions)) {
+    if (
+      operation.type === "clear_board" ||
+      operation.type === "clear_ai_elements"
+    ) {
+      bounds.clear();
+      continue;
+    }
+    if (operation.type === "delete_element") {
+      bounds.delete(operation.elementId);
+      continue;
+    }
+    if (operation.type === "add_text") {
+      const fontSize = operation.fontSize ?? DEFAULT_LESSON_FONT_SIZE;
+      if (fontSize < MIN_LESSON_FONT_SIZE) {
+        throw new TeacherLessonValidationError(
+          `Text ${operation.elementId} uses font size ${fontSize}; lesson text must be at least ${MIN_LESSON_FONT_SIZE}.`,
+        );
+      }
+      bounds.set(
+        operation.elementId,
+        textBounds(
+          operation.elementId,
+          operation.x,
+          operation.y,
+          operation.text,
+          fontSize,
+        ),
+      );
+      continue;
+    }
+    if (operation.type === "update_element") {
+      const current = bounds.get(operation.elementId);
+      if (!current) continue;
+      bounds.set(operation.elementId, {
+        ...current,
+        x: operation.patch.x ?? current.x,
+        y: operation.patch.y ?? current.y,
+        width: operation.patch.width ?? current.width,
+        height: operation.patch.height ?? current.height,
+      });
+    }
+  }
+
+  const visualBounds = [...bounds.values()];
+  for (let leftIndex = 0; leftIndex < visualBounds.length; leftIndex += 1) {
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < visualBounds.length;
+      rightIndex += 1
+    ) {
+      const left = visualBounds[leftIndex];
+      const right = visualBounds[rightIndex];
+      if (overlaps(left, right)) {
+        throw new TeacherLessonValidationError(
+          `Board elements ${left.id} and ${right.id} overlap; repair the layout with clear spacing.`,
+        );
+      }
+    }
+  }
 }
 
 export function summarizeTeacherLessonPlan(
@@ -95,6 +274,7 @@ export function assertTeacherLessonQuality(
   mode: TeacherLessonMode,
 ): TeacherLessonPlanStats {
   const stats = summarizeTeacherLessonPlan(plan);
+  assertReadableLayout(plan);
   if (mode === "clarification") {
     if (stats.cueCount > 4 || stats.visibleOperations < 1) {
       throw new TeacherLessonValidationError(

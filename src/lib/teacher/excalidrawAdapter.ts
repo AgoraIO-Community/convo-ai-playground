@@ -59,7 +59,7 @@ function labelSkeleton(element: TeacherSceneElement) {
   return {
     id: `${element.id}-label`,
     text: element.label,
-    fontSize: 22,
+    fontSize: 26,
     fontFamily: FONT_FAMILY.Virgil,
     strokeColor: BOARD_COLORS[element.color],
     customData: {
@@ -76,7 +76,7 @@ function toSkeleton(element: TeacherSceneElement): ExcalidrawElementSkeleton {
       ...common,
       type: "text",
       text: element.text ?? "",
-      fontSize: element.fontSize ?? 26,
+      fontSize: element.fontSize ?? 30,
       fontFamily: FONT_FAMILY.Virgil,
       textAlign: "left",
       verticalAlign: "top",

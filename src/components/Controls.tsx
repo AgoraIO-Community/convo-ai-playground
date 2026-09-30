@@ -16,7 +16,10 @@ import {
 import { inviteAgent, stopAgent, updateAgent } from "@/api/agentApi";
 import AgentGlyph from "@/components/AgentGlyph";
 import SettingsSidebar from "@/components/SettingsSidebar";
-import { withAiTeacherRuntimeDefaults } from "@/constants/aiTeacherDefaults";
+import {
+  getAiTeacherLearnerName,
+  withAiTeacherRuntimeDefaults,
+} from "@/constants/aiTeacherDefaults";
 import { useAgora } from "@/hooks/useAgora";
 import {
   getTranscriptTransport,
@@ -230,10 +233,14 @@ const Controls: React.FC<ControlsProps> = ({
           : "rtm"
         : getTranscriptTransport(normalizedSettings);
       await configureRtm(transport === "rtm");
+      const greetingName =
+        experienceMode === "teacher"
+          ? getAiTeacherLearnerName(localUsername)
+          : localUsername || undefined;
       const result = await inviteAgent(channelId, localUID, normalizedSettings, {
         useCustomPayload: Boolean(customJoinPayload),
         customJoinPayload,
-        username: localUsername || undefined,
+        username: greetingName,
         teacherSession: experienceMode === "teacher" && teacherSession
           ? {
               sessionId: teacherSession.sessionId,

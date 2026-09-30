@@ -71,8 +71,10 @@ const VideoCallScreen: React.FC = () => {
   const isEndingRef = useRef(false);
   const avatarAspectRatio =
     agentSettings?.avatar?.vendor === "lemonslice"
-      ? ((agentSettings.avatar.params as AvatarLemonSliceParams)
-          .aspect_ratio ?? "1x1")
+      ? teacherModeEnabled
+        ? "2x3"
+        : ((agentSettings.avatar.params as AvatarLemonSliceParams)
+            .aspect_ratio ?? "1x1")
       : undefined;
 
   const {
@@ -350,7 +352,7 @@ const VideoCallScreen: React.FC = () => {
               }`}
               aria-hidden={callExperienceMode !== "teacher"}
             >
-              <div className="mx-auto h-full w-full max-w-7xl">
+              <div className="h-full w-full">
                 <TeacherStage
                   active={callExperienceMode === "teacher"}
                   teacher={teacher}

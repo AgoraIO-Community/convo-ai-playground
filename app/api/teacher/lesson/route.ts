@@ -130,6 +130,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             ? error.upstreamStatus
             : null,
         category: error.name,
+        reason: error.message,
       });
       return NextResponse.json(
         { error: "Teacher lesson planner returned an invalid response." },

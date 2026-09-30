@@ -227,36 +227,54 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
       data-testid="teacher-stage"
       data-teacher-elements={Object.keys(teacher.boardState.elements).length}
     >
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[26px] bg-[#020908] p-1.5 shadow-2xl sm:p-2">
-        <TeacherBoard
-          ref={boardRef}
-          state={teacher.boardState}
-          animation={teacher.activeAnimation}
-          active={active}
-        />
-
-        <div className="pointer-events-none absolute left-5 top-5 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-slate-100 shadow-lg backdrop-blur-xl sm:left-6 sm:top-6">
-          <MdSchool className="text-base text-cyan-300" />
-          AI Teacher
-        </div>
-
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
         <div
-          className="absolute right-5 top-5 z-20 inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-[11px] font-medium text-slate-200 shadow-lg backdrop-blur-xl sm:right-6 sm:top-6 sm:text-xs"
-          aria-live="polite"
+          className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[26px] bg-[#020908] p-1.5 shadow-2xl sm:p-2"
+          data-testid="teacher-board-surface"
         >
-          <span
-            className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${status.dot}`}
+          <TeacherBoard
+            ref={boardRef}
+            state={teacher.boardState}
+            animation={teacher.activeAnimation}
+            active={active}
+            canvasRightOffset={showAvatarBesideBoard ? 24 : 250}
           />
-          {status.label}
+
+          <div className="pointer-events-none absolute left-5 top-5 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-slate-100 shadow-lg backdrop-blur-xl sm:left-6 sm:top-6">
+            <MdSchool className="text-base text-cyan-300" />
+            AI Teacher
+          </div>
+
+          <div
+            className="absolute right-5 top-5 z-20 inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-[11px] font-medium text-slate-200 shadow-lg backdrop-blur-xl sm:right-6 sm:top-6 sm:text-xs"
+            aria-live="polite"
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${status.dot}`}
+            />
+            {status.label}
+          </div>
+
+          {!showAvatarBesideBoard && (
+            <aside
+              className={`absolute bottom-4 right-4 z-30 overflow-hidden rounded-2xl border border-cyan-200/35 bg-slate-950 shadow-[0_20px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.04)] sm:bottom-5 sm:right-5 ${overlayAvatarFrameClass(avatarAspectRatio, isPreview)}`}
+              aria-label="AI teacher picture in picture"
+            >
+              {avatar}
+            </aside>
+          )}
         </div>
 
         {!isPreview && (
-          <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 sm:bottom-5 sm:left-5">
+          <div
+            className="flex h-11 shrink-0 items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/70 px-2.5 shadow-lg backdrop-blur-xl"
+            data-testid="teacher-board-actions"
+          >
             {canPlayDemo && (
               <button
                 type="button"
                 onClick={handlePlayDemo}
-                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-cyan-200/20 bg-slate-950/80 px-3 text-xs font-semibold text-cyan-50 shadow-lg backdrop-blur-xl transition hover:border-cyan-200/40 hover:bg-slate-900/90 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-cyan-200/20 bg-slate-900/80 px-3 text-xs font-semibold text-cyan-50 transition hover:border-cyan-200/40 hover:bg-slate-800/90 focus:outline-none focus:ring-2 focus:ring-cyan-300"
               >
                 <MdPlayArrow className="text-base" />
                 Play demo lesson
@@ -266,7 +284,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
               <button
                 type="button"
                 onClick={handlePauseDemo}
-                className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-slate-950/80 text-slate-200 shadow-lg backdrop-blur-xl transition hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-slate-900/80 text-slate-200 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-300"
                 aria-label="Pause demo lesson"
                 title="Pause demo lesson"
               >
@@ -276,22 +294,13 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
             <button
               type="button"
               onClick={handleClear}
-              className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-slate-950/80 text-slate-300 shadow-lg backdrop-blur-xl transition hover:bg-slate-900 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300"
+              className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-slate-900/80 text-slate-300 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300"
               aria-label="Clear blackboard"
               title="Clear blackboard"
             >
               <MdDeleteOutline />
             </button>
           </div>
-        )}
-
-        {!showAvatarBesideBoard && (
-          <aside
-            className={`absolute bottom-4 right-4 z-30 overflow-hidden rounded-2xl border border-cyan-200/35 bg-slate-950 shadow-[0_20px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.04)] sm:bottom-5 sm:right-5 ${overlayAvatarFrameClass(avatarAspectRatio, isPreview)}`}
-            aria-label="AI teacher picture in picture"
-          >
-            {avatar}
-          </aside>
         )}
       </div>
 

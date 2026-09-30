@@ -1,5 +1,6 @@
 import {
   assertTeacherLessonQuality,
+  normalizeTeacherLessonLayout,
   parseTeacherLessonPlan,
   TeacherLessonValidationError,
 } from "@/lib/teacher/lessonSchema";
@@ -8,11 +9,11 @@ import type {
   TeacherLessonMode,
   TeacherLessonPlan,
 } from "@/types/teacher";
-import { AI_TEACHER_DEFAULT_MODEL } from "@/constants/aiTeacherDefaults";
+import { AI_TEACHER_DIRECTOR_DEFAULT_MODEL } from "@/constants/aiTeacherDefaults";
 
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
-const DEFAULT_MODEL = AI_TEACHER_DEFAULT_MODEL;
-const PLANNER_TIMEOUT_MS = 20_000;
+const DEFAULT_MODEL = AI_TEACHER_DIRECTOR_DEFAULT_MODEL;
+const PLANNER_TIMEOUT_MS = 45_000;
 
 const SYSTEM_PROMPT = `You are the lesson planner for a live, interactive AI teacher with a dark Excalidraw blackboard.
 Return only one JSON object with this exact shape:
@@ -20,7 +21,9 @@ Return only one JSON object with this exact shape:
 
 The user payload contains lesson_mode. For lesson_mode "lesson", create a complete 4 to 7 cue lesson that continues automatically from introduction through explanation and recap. For lesson_mode "clarification", create 1 to 4 focused cues that resolve the learner's confusion using the existing board and parent topic. Each cue must contain concise, accurate speech and 1 to 16 board operations that visibly support exactly what is being said in that cue. The board update happens immediately before its speech. Never ask the learner to say continue. Never say you will draw later and never mention tools, JSON, MCP, coordinates, turn IDs, or system behavior.
 
-You can teach any topic without templates. Choose the best visual language for the concept: explanatory text, headings, equations, worked steps, short code, labeled shapes, timelines, lists, or connected diagrams. In full lesson mode, always create a meaningful visual structure with at least two labeled shapes and one arrow or line, even for worked examples where the shapes may group steps. Do not return a title-only or text-only lesson. Build understanding incrementally like a strong online teacher: introduce, develop, connect, give a concrete example, and recap. Use readable spacing within a primary canvas around x=80..1100 and y=70..700. Prefer font sizes 22..38. Keep labels short. Reuse stable element IDs when updating. Do not overlap unrelated content. Do not clear existing board content during a clarification.
+You can teach any topic without templates. Choose the best visual language for the concept: explanatory text, headings, equations, worked steps, short code, labeled shapes, timelines, lists, or connected diagrams. In full lesson mode, always create a meaningful visual structure with at least two labeled shapes and one arrow or line, even for worked examples where the shapes may group steps. Do not return a title-only or text-only lesson. Build understanding incrementally like a strong online teacher: introduce, develop, connect, give a concrete example, and recap.
+
+Lay out the board for legibility at presentation size. Use a primary canvas around x=80..1000 and y=70..700. Use 38..44 for titles and 28..32 for supporting text; never use text smaller than 28. Keep shape and connector labels to a few words. Put no more than three major nodes in one row. Leave at least 32 pixels between standalone text rows and 48 pixels between visual sections. Every standalone text block and shape must have clear empty space around it: do not place text over a shape, another text block, or a connector, and do not overlap shapes. Route arrows around labels instead of through them. Prefer multiple clean rows over compressing content. Reuse stable element IDs when updating. Do not clear existing board content during a clarification.
 
 Allowed operations and fields only:
 - add_text: type, element_id, x, y, text, optional color, optional font_size
@@ -173,7 +176,9 @@ function parsePlanContent(
       "Lesson planner returned invalid JSON.",
     );
   }
-  const plan = parseTeacherLessonPlan(planWire, input.turnId);
+  const plan = normalizeTeacherLessonLayout(
+    parseTeacherLessonPlan(planWire, input.turnId),
+  );
   assertTeacherLessonQuality(plan, input.mode);
   return plan;
 }
@@ -198,6 +203,10 @@ export async function planTeacherLesson(
       plan = parsePlanContent(content, input);
     } catch (error) {
       if (!(error instanceof TeacherLessonValidationError)) throw error;
+      console.warn("[teacher-director] initial lesson plan needs repair", {
+        reason: error.message,
+        mode: input.mode,
+      });
       repaired = true;
       const repairedContent = await requestPlanContent(
         input,

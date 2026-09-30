@@ -33,7 +33,7 @@ function toSceneElement(
   existing: TeacherSceneElement | undefined,
 ): TeacherSceneElement {
   if (operation.type === "add_text") {
-    const fontSize = operation.fontSize ?? 26;
+    const fontSize = operation.fontSize ?? 30;
     return {
       id: operation.elementId,
       owner: "ai",

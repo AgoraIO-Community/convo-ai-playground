@@ -50,6 +50,7 @@ interface TeacherBoardProps {
   animation?: "progressive" | "instant";
   active?: boolean;
   className?: string;
+  canvasRightOffset?: number;
 }
 
 const STUDENT_OWNER = "student";
@@ -77,7 +78,13 @@ function delay(milliseconds: number): Promise<void> {
 
 const TeacherBoard = forwardRef<TeacherBoardHandle, TeacherBoardProps>(
   function TeacherBoard(
-    { state, animation = "instant", active = true, className = "" },
+    {
+      state,
+      animation = "instant",
+      active = true,
+      className = "",
+      canvasRightOffset = 24,
+    },
     forwardedRef,
   ) {
     const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
@@ -158,16 +165,21 @@ const TeacherBoard = forwardRef<TeacherBoardHandle, TeacherBoardProps>(
         if (focusTargets.length > 0) {
           api.scrollToContent(focusTargets, {
             fitToViewport: true,
-            viewportZoomFactor: 0.84,
-            minZoom: 0.35,
-            maxZoom: 1.4,
+            viewportZoomFactor: 0.92,
+            minZoom: 0.45,
+            maxZoom: 1.6,
             animate: nextAnimation === "progressive",
             duration: 320,
-            canvasOffsets: { top: 56, right: 250, bottom: 36, left: 24 },
+            canvasOffsets: {
+              top: 56,
+              right: canvasRightOffset,
+              bottom: 36,
+              left: 24,
+            },
           });
         }
       },
-      [updateScene],
+      [canvasRightOffset, updateScene],
     );
 
     const cancelAnimation = useCallback(() => {
