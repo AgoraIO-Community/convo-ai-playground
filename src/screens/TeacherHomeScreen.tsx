@@ -30,6 +30,7 @@ const TeacherHomeScreen: React.FC<TeacherHomeScreenProps> = ({
   return (
     <TeacherDemoLandingScreen
       phase="landing"
+      requiresSignIn={!isAuthenticated}
       onEnter={handleEnter}
       onRetry={handleEnter}
       onSignOut={isAuthenticated ? handleSignOut : undefined}

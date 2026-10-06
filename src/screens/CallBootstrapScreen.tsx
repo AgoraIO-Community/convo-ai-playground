@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import { createRtcSession } from "@/api/agoraApi";
 import MeetingLoadingSkeleton from "@/components/MeetingLoadingSkeleton";
+import TeacherClassroomLoadingScreen from "@/components/teacher/TeacherClassroomLoadingScreen";
 import { isAiTeacherModeEnabled } from "@/constants/featureFlags";
 import { useAgora } from "@/hooks/useAgora";
 import { getTranscriptTransport } from "@/lib/agora/transcriptTransport";
@@ -94,6 +95,15 @@ const CallBootstrapScreen: React.FC<CallBootstrapScreenProps> = ({
   }, []);
 
   if (status === "active") return <VideoCallScreen />;
+  if (teacherModeEnabled && startImmediately) {
+    return (
+      <TeacherClassroomLoadingScreen
+        errorMessage={status === "error" ? errorMessage : undefined}
+        onRetry={status === "error" ? handleRetry : undefined}
+        onSignOut={status === "error" ? handleSignOut : undefined}
+      />
+    );
+  }
   if (teacherModeEnabled) {
     const landingPhase: TeacherLandingPhase = status;
     return (

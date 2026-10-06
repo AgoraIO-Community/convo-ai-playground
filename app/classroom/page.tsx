@@ -1,11 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import MeetingLoadingSkeleton from "@/components/MeetingLoadingSkeleton";
+import TeacherClassroomLoadingScreen from "@/components/teacher/TeacherClassroomLoadingScreen";
 
 const CallBootstrapScreen = dynamic(
   () => import("@/screens/CallBootstrapScreen"),
-  { ssr: false, loading: () => <MeetingLoadingSkeleton /> },
+  { ssr: false, loading: () => <TeacherClassroomLoadingScreen /> },
 );
 
 export default function ClassroomPage() {
