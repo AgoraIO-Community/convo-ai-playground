@@ -1,7 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import MeetingLoadingSkeleton from "@/components/MeetingLoadingSkeleton";
+import { isAiTeacherModeEnabled } from "@/constants/featureFlags";
 
 const CallBootstrapScreen = dynamic(
   () => import("@/screens/CallBootstrapScreen"),
@@ -9,5 +12,14 @@ const CallBootstrapScreen = dynamic(
 );
 
 export default function CallPage() {
+  const router = useRouter();
+  const teacherModeEnabled = isAiTeacherModeEnabled();
+
+  useEffect(() => {
+    if (teacherModeEnabled) router.replace("/classroom");
+  }, [router, teacherModeEnabled]);
+
+  if (teacherModeEnabled) return <MeetingLoadingSkeleton />;
+
   return <CallBootstrapScreen />;
 }

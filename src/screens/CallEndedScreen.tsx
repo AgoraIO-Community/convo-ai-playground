@@ -3,12 +3,13 @@
 import { useCallback } from "react";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { isAiTeacherModeEnabled } from "@/constants/featureFlags";
 
 const CallEndedScreen: React.FC = () => {
   const router = useRouter();
 
   const handleStartNewCall = useCallback((): void => {
-    router.replace("/call");
+    router.replace(isAiTeacherModeEnabled() ? "/classroom" : "/call");
   }, [router]);
 
   const handleSignOut = useCallback((): void => {

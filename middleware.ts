@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
-  const isProtectedPage = pathname === "/call" || pathname === "/call-ended";
+  const isProtectedPage =
+    pathname === "/call" ||
+    pathname === "/classroom" ||
+    pathname === "/call-ended";
   const isProtectedAgentApi = pathname.startsWith("/api/agent/");
   const isProtectedTeacherApi =
     pathname.startsWith("/api/teacher/") && pathname !== "/api/teacher/mcp";
@@ -22,6 +25,7 @@ export default auth((req) => {
 export const config = {
   matcher: [
     "/call",
+    "/classroom",
     "/call-ended",
     "/api/agent/:path*",
     "/api/teacher/:path*",

@@ -15,7 +15,13 @@ import VideoCallScreen from "@/screens/VideoCallScreen";
 
 type BootstrapStatus = "landing" | "joining" | "active" | "error";
 
-const CallBootstrapScreen: React.FC = () => {
+interface CallBootstrapScreenProps {
+  startImmediately?: boolean;
+}
+
+const CallBootstrapScreen: React.FC<CallBootstrapScreenProps> = ({
+  startImmediately = false,
+}) => {
   const teacherModeEnabled = isAiTeacherModeEnabled();
   const callActive = useAppStore((state) => state.callActive);
   const callStart = useAppStore((state) => state.callStart);
@@ -24,7 +30,11 @@ const CallBootstrapScreen: React.FC = () => {
   const hasStartedRef = useRef(false);
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<BootstrapStatus>(
-    callActive ? "active" : teacherModeEnabled ? "landing" : "joining",
+    callActive
+      ? "active"
+      : teacherModeEnabled && !startImmediately
+        ? "landing"
+        : "joining",
   );
   const [errorMessage, setErrorMessage] = useState("");
 

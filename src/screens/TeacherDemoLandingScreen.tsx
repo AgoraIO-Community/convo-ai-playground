@@ -20,7 +20,7 @@ interface TeacherDemoLandingScreenProps {
   errorMessage?: string;
   onEnter(): void;
   onRetry(): void;
-  onSignOut(): void;
+  onSignOut?: () => void;
 }
 
 const capabilities = [
@@ -165,14 +165,16 @@ const TeacherDemoLandingScreen: React.FC<TeacherDemoLandingScreenProps> = ({
               ) : null}
             </button>
 
-            <button
-              type="button"
-              onClick={onSignOut}
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium text-slate-400 transition hover:bg-white/[0.05] hover:text-white focus:outline-none focus:ring-2 focus:ring-white/30 motion-reduce:transition-none"
-            >
-              <MdLogout aria-hidden />
-              Sign out
-            </button>
+            {onSignOut ? (
+              <button
+                type="button"
+                onClick={onSignOut}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium text-slate-400 transition hover:bg-white/[0.05] hover:text-white focus:outline-none focus:ring-2 focus:ring-white/30 motion-reduce:transition-none"
+              >
+                <MdLogout aria-hidden />
+                Sign out
+              </button>
+            ) : null}
           </div>
 
           <div className="mt-6 flex items-center gap-3 text-xs text-slate-500">
