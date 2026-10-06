@@ -9,6 +9,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import useAppStore from "@/store/useAppStore";
 import { ASR_PRESETS, TTS_PRESETS, type AgentSettings } from "@/types/agora";
+import { ANAM_DEFAULT_AVATAR_ID } from "@/constants/anamAvatars";
 import SettingsSidebar, {
   getDefaultASRConfig,
   getDefaultSettings,
@@ -47,12 +48,21 @@ describe("SettingsSidebar provider defaults", () => {
     expect(defaults.tts).toMatchObject({
       credential_mode: "byok",
       vendor: "elevenlabs",
-      params: { key: "" },
+      params: {
+        key: "",
+        voice_id: "cgSgspJ2msm6clMCkdW9",
+        model_id: "eleven_flash_v2_5",
+      },
     });
     expect(defaults.asr).toMatchObject({
       credential_mode: "byok",
       vendor: "deepgram",
       params: { api_key: "" },
+    });
+    expect(defaults.avatar).toMatchObject({
+      enable: true,
+      vendor: "anam",
+      params: { avatar_id: ANAM_DEFAULT_AVATAR_ID },
     });
   });
 });

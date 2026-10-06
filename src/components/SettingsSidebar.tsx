@@ -884,7 +884,7 @@ export const getDefaultSettings = (): AgentSettingsType => {
       disabled_config: { strategy: "append" },
     },
     avatar: {
-      enable: false,
+      enable: true,
       vendor: "anam",
       params: getDefaultAvatarParams("anam"),
     },

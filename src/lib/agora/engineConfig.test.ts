@@ -5,6 +5,72 @@ import {
 } from "./engineConfig";
 
 describe("migrateAgentSettings", () => {
+  it("upgrades the previous teacher media defaults to Samira and Jessica", () => {
+    const migrated = migrateAgentSettings({
+      schemaVersion: 214,
+      name: "teacher-agent",
+      llm: { url: "https://llm.example.test", api_key: "" },
+      tts: {
+        vendor: "elevenlabs",
+        params: {
+          voice_id: "pFZP5JQG7iQjIQuC4Bku",
+          model_id: "eleven_flash_v2_5",
+        },
+      },
+      avatar: {
+        enable: false,
+        vendor: "anam",
+        params: {
+          api_key: "",
+          agora_uid: "",
+          avatar_id: "edf6fdcb-acab-44b8-b974-ded72665ee26",
+        },
+      },
+    });
+
+    expect(migrated.avatar).toMatchObject({
+      enable: true,
+      vendor: "anam",
+      params: {
+        avatar_id: "0caf57ab-3da9-4d27-b356-53837508aaf6",
+        sample_rate: 24000,
+        quality: "high",
+        video_encoding: "H264",
+      },
+    });
+    expect(migrated.tts).toMatchObject({
+      vendor: "elevenlabs",
+      params: { voice_id: "cgSgspJ2msm6clMCkdW9" },
+    });
+  });
+
+  it("preserves explicit teacher media choices after the defaults migration", () => {
+    const current = migrateAgentSettings({
+      schemaVersion: ENGINE_SETTINGS_SCHEMA_VERSION,
+      name: "teacher-agent",
+      llm: { url: "https://llm.example.test", api_key: "" },
+      tts: {
+        vendor: "elevenlabs",
+        params: { voice_id: "custom-voice" },
+      },
+      avatar: {
+        enable: false,
+        vendor: "anam",
+        params: {
+          api_key: "",
+          agora_uid: "",
+          avatar_id: "custom-avatar",
+        },
+      },
+    });
+
+    expect(current.avatar).toMatchObject({
+      enable: false,
+      params: { avatar_id: "custom-avatar" },
+    });
+    expect(current.tts.params).toMatchObject({ voice_id: "custom-voice" });
+  });
+
   it("moves legacy disabled SoS behavior into top-level interruption", () => {
     const migrated = migrateAgentSettings({
       name: "legacy-agent",

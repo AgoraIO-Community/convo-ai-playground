@@ -1,5 +1,5 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EAgentState } from "@/types/agora";
 import useAppStore from "@/store/useAppStore";
@@ -176,6 +176,12 @@ describe("VideoCallScreen transcript transport", () => {
   it("starts in teacher mode when the camera is unpublished", () => {
     render(<VideoCallScreen />);
 
+    expect(
+      screen.queryByRole("radio", { name: "Voice Agent" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("radio", { name: "Video Agent" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("teacher-stage")).toBeInTheDocument();
     expect(screen.queryByTestId("voice-agent-stage")).not.toBeInTheDocument();
     expect(screen.queryByTestId("local-video-stage")).not.toBeInTheDocument();
@@ -185,44 +191,4 @@ describe("VideoCallScreen transcript transport", () => {
     );
   });
 
-  it("publishes the camera before entering video mode and preserves transcript", async () => {
-    render(<VideoCallScreen />);
-
-    fireEvent.click(screen.getByRole("radio", { name: "Video Agent" }));
-
-    await waitFor(() =>
-      expect(mocks.setLocalVideoEnabled).toHaveBeenCalledWith(true),
-    );
-    expect(screen.getByTestId("local-video-stage")).toBeInTheDocument();
-    expect(screen.getAllByTestId("transcript-panel")).not.toHaveLength(0);
-    expect(useAppStore.getState().isAgentActive).toBe(false);
-  });
-
-  it("stays in voice mode when camera publication fails", async () => {
-    mocks.setLocalVideoEnabled.mockImplementation(async (enabled: boolean) => {
-      if (enabled) throw new Error("Permission denied");
-    });
-    render(<VideoCallScreen />);
-
-    fireEvent.click(screen.getByRole("radio", { name: "Video Agent" }));
-
-    await waitFor(() => expect(mocks.showToast).toHaveBeenCalledOnce());
-    expect(screen.getByTestId("voice-agent-stage")).toBeInTheDocument();
-    expect(screen.queryByTestId("local-video-stage")).not.toBeInTheDocument();
-  });
-
-  it("unpublishes the camera before returning to voice mode", async () => {
-    useAppStore.setState({ videoMuted: false });
-    render(<VideoCallScreen />);
-
-    fireEvent.click(screen.getByRole("radio", { name: "Video Agent" }));
-    await screen.findByTestId("local-video-stage");
-
-    fireEvent.click(screen.getByRole("radio", { name: "Voice Agent" }));
-
-    await waitFor(() =>
-      expect(mocks.setLocalVideoEnabled).toHaveBeenCalledWith(false),
-    );
-    expect(screen.getByTestId("voice-agent-stage")).toBeInTheDocument();
-  });
 });

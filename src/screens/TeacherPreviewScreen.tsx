@@ -1,8 +1,8 @@
 "use client";
 
 import { MdCallEnd, MdMic, MdSchool, MdSettings, MdTimer } from "react-icons/md";
-import CallExperienceModeSwitch from "@/components/CallExperienceModeSwitch";
 import TeacherStage from "@/components/teacher/TeacherStage";
+import { AI_TEACHER_NAME } from "@/constants/aiTeacherDefaults";
 import { useTeacherBoardSession } from "@/hooks/useTeacherBoardSession";
 import { EAgentState } from "@/types/agora";
 
@@ -18,7 +18,6 @@ export default function TeacherPreviewScreen() {
           <p className="truncate text-sm font-semibold sm:text-base">Private agent call</p>
           <p className="text-xs text-slate-400">Teacher Mode · development preview</p>
         </div>
-        <CallExperienceModeSwitch value="teacher" onChange={() => undefined} />
         <span className="hidden rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-300 sm:inline-flex">
           RTM live
         </span>
@@ -51,7 +50,7 @@ export default function TeacherPreviewScreen() {
               active
               teacher={teacher}
               agentId="prototype-agent"
-              agentName="Emma"
+              agentName={AI_TEACHER_NAME}
               agentState={EAgentState.SPEAKING}
               transcriptionMode="rtm"
             />

@@ -10,6 +10,7 @@ import {
   MdSchool,
 } from "react-icons/md";
 import TeacherStage from "@/components/teacher/TeacherStage";
+import { AI_TEACHER_NAME } from "@/constants/aiTeacherDefaults";
 import { useTeacherBoardSession } from "@/hooks/useTeacherBoardSession";
 import { EAgentState } from "@/types/agora";
 
@@ -229,10 +230,10 @@ const TeacherDemoLandingScreen: React.FC<TeacherDemoLandingScreenProps> = ({
                 active
                 variant="preview"
                 teacher={teacher}
-                agentName="Emma"
+                agentName={AI_TEACHER_NAME}
                 agentState={EAgentState.SPEAKING}
                 transcriptionMode="rtm"
-                previewAvatarImageSrc="/images/ai-teacher-maya-lemonslice-seated.jpg"
+                previewAvatarImageSrc="/images/ai-teacher-samira-anam.png"
               />
             </div>
             <div className="mt-4 grid grid-cols-3 gap-2 text-[10px] uppercase tracking-[0.16em] text-slate-600 sm:text-xs">

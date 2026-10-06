@@ -475,7 +475,7 @@ You: "Jury mein DRDO, UNDP, Dell, Agora aur UPES ke experts hain. Bahut talented
       enable_tools: true,
     },
     avatar: {
-      enable: false,
+      enable: true,
       vendor: "anam",
       params: getDefaultAvatarParams("anam"),
     },

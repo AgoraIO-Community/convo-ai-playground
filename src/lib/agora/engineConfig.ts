@@ -4,8 +4,19 @@ import type {
   MCPServerConfig,
   MllmTurnDetection,
 } from "@/types/agora";
+import { ANAM_DEFAULT_AVATAR_ID } from "@/constants/anamAvatars";
+import { ELEVENLABS_DEFAULT_VOICE_ID } from "@/constants/elevenlabsDefaults";
 
-export const ENGINE_SETTINGS_SCHEMA_VERSION = 213 as const;
+export const ENGINE_SETTINGS_SCHEMA_VERSION = 215 as const;
+
+const PREVIOUS_ANAM_DEFAULTS = new Set([
+  "30fa96d0-26c4-4e55-94a0-517025942e18",
+  "edf6fdcb-acab-44b8-b974-ded72665ee26",
+]);
+const PREVIOUS_ELEVENLABS_DEFAULTS = new Set([
+  "90ipbRoKi4CpHXvKVtl0",
+  "pFZP5JQG7iQjIQuC4Bku",
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -182,12 +193,64 @@ function migrateParameters(settings: Record<string, unknown>): void {
   delete parameters.farewell_phrases;
 }
 
+function migrateTeacherMediaDefaults(
+  settings: Record<string, unknown>,
+  sourceSchemaVersion: number,
+): void {
+  if (
+    sourceSchemaVersion === 0 ||
+    sourceSchemaVersion >= ENGINE_SETTINGS_SCHEMA_VERSION
+  ) {
+    return;
+  }
+
+  const avatar = isRecord(settings.avatar) ? settings.avatar : undefined;
+  if (!avatar) {
+    settings.avatar = {
+      enable: true,
+      vendor: "anam",
+      params: {
+        api_key: "",
+        agora_uid: "",
+        avatar_id: ANAM_DEFAULT_AVATAR_ID,
+        sample_rate: 24000,
+        quality: "high",
+        video_encoding: "H264",
+      },
+    };
+  } else if (avatar.vendor === "anam") {
+    avatar.enable = true;
+    const params = isRecord(avatar.params) ? avatar.params : {};
+    const avatarId = String(params.avatar_id ?? "").trim();
+    if (!avatarId || PREVIOUS_ANAM_DEFAULTS.has(avatarId)) {
+      params.avatar_id = ANAM_DEFAULT_AVATAR_ID;
+    }
+    params.sample_rate ??= 24000;
+    params.quality ??= "high";
+    params.video_encoding ??= "H264";
+    avatar.params = params;
+  }
+
+  const tts = isRecord(settings.tts) ? settings.tts : undefined;
+  if (tts?.vendor === "elevenlabs") {
+    const params = isRecord(tts.params) ? tts.params : {};
+    const voiceId = String(params.voice_id ?? "").trim();
+    if (!voiceId || PREVIOUS_ELEVENLABS_DEFAULTS.has(voiceId)) {
+      params.voice_id = ELEVENLABS_DEFAULT_VOICE_ID;
+    }
+    tts.params = params;
+  }
+}
+
 export function migrateAgentSettings(input: unknown): AgentSettings {
   const settings = cloneRecord(input);
+  const sourceSchemaVersion =
+    typeof settings.schemaVersion === "number" ? settings.schemaVersion : 0;
   migrateInterruption(settings);
   migrateMllm(settings);
   migrateAliases(settings);
   migrateParameters(settings);
+  migrateTeacherMediaDefaults(settings, sourceSchemaVersion);
   settings.schemaVersion = ENGINE_SETTINGS_SCHEMA_VERSION;
   return settings as unknown as AgentSettings;
 }

@@ -27,6 +27,24 @@ function createTeacher(): UseTeacherBoardSessionResult {
 }
 
 describe("TeacherStage", () => {
+  it("uses a landscape frame for the landing-page teacher preview", () => {
+    render(
+      <TeacherStage
+        active
+        teacher={createTeacher()}
+        agentName="Samira"
+        agentState={EAgentState.SPEAKING}
+        transcriptionMode="rtm"
+        variant="preview"
+        previewAvatarImageSrc="/images/ai-teacher-samira-anam.png"
+      />,
+    );
+
+    expect(
+      screen.getByLabelText("AI teacher picture in picture"),
+    ).toHaveClass("aspect-[3/2]");
+  });
+
   it("keeps lesson actions outside the interactive whiteboard surface", () => {
     render(
       <TeacherStage

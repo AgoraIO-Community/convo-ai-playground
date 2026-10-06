@@ -84,7 +84,7 @@ const TeacherAvatarPiP: React.FC<TeacherAvatarPiPProps> = ({
           alt={`${agentName} AI teacher`}
           fill
           sizes="(max-width: 640px) 100px, 148px"
-          className="object-contain object-center"
+          className="object-cover object-center"
           priority
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-slate-950/5" />

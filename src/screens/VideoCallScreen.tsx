@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MdTimer } from "react-icons/md";
 import AgentTile from "@/components/AgentTile";
-import CallExperienceModeSwitch from "@/components/CallExperienceModeSwitch";
 import Controls from "@/components/Controls";
 import TeacherStage from "@/components/teacher/TeacherStage";
 import TranscriptDrawer from "@/components/TranscriptDrawer";
@@ -166,44 +165,6 @@ const VideoCallScreen: React.FC = () => {
     [endCall],
   );
 
-  const handleExperienceModeChange = useCallback(
-    async (nextMode: StandardCallExperienceMode): Promise<void> => {
-      if (nextMode === callExperienceMode || isModeChanging) return;
-      if (isAgentActive) {
-        showToast("Stop the agent before switching call modes.", "info");
-        return;
-      }
-      setIsModeChanging(true);
-      try {
-        await setLocalVideoEnabled(nextMode === "video");
-        previousNonTeacherModeRef.current = nextMode;
-        if (callExperienceMode === "teacher") teacher.pauseDemo();
-        setCallExperienceMode(nextMode);
-      } catch {
-        if (nextMode === "video") {
-          await setLocalVideoEnabled(false).catch(() => undefined);
-          previousNonTeacherModeRef.current = "voice";
-          teacher.pauseDemo();
-          setCallExperienceMode("voice");
-          showToast(
-            "Camera unavailable, so the call returned to Voice Agent mode.",
-            "error",
-          );
-        } else {
-          showToast("Unable to switch to voice mode.", "error");
-        }
-      } finally {
-        setIsModeChanging(false);
-      }
-    }, [
-      callExperienceMode,
-      isAgentActive,
-      isModeChanging,
-      setLocalVideoEnabled,
-      teacher,
-    ],
-  );
-
   const handleTeacherModeToggle = useCallback(async (): Promise<void> => {
     if (isModeChanging) return;
     if (isAgentActive) {
@@ -317,14 +278,6 @@ const VideoCallScreen: React.FC = () => {
                 ? "Connected with Agora RTC + RTM"
                 : "Connected with Agora RTC"}
           </p>
-        </div>
-
-        <div className="order-3 flex w-full justify-center sm:order-none sm:w-auto">
-          <CallExperienceModeSwitch
-            value={callExperienceMode}
-            onChange={(mode) => void handleExperienceModeChange(mode)}
-            disabled={isModeChanging}
-          />
         </div>
 
         {isAgentActive && (

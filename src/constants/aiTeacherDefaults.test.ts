@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AgentSettings } from "@/types/agora";
 import {
+  AI_TEACHER_GREETING,
+  AI_TEACHER_SYSTEM_PROMPT,
   getAiTeacherLearnerName,
   withAiTeacherRuntimeDefaults,
 } from "./aiTeacherDefaults";
@@ -34,6 +36,11 @@ function createSettings(): AgentSettings {
 }
 
 describe("withAiTeacherRuntimeDefaults", () => {
+  it("introduces the visual teacher as Samira", () => {
+    expect(AI_TEACHER_SYSTEM_PROMPT).toContain("You are Samira");
+    expect(AI_TEACHER_GREETING).toContain("I'm Samira");
+  });
+
   it("uses a portrait LemonSlice canvas so the teacher is not cropped", () => {
     const result = withAiTeacherRuntimeDefaults(createSettings());
 

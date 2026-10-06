@@ -7,8 +7,11 @@ export interface AnamAvatarOption {
   value: string;
 }
 
-/** Ten personas from Anam stock `data` (mixed poses / variants). Cara — desk first = app default. */
+/** Curated Anam stock avatars. Teacher-oriented choices are listed first. */
 export const ANAM_AVATAR_OPTIONS: AnamAvatarOption[] = [
+  { label: "Samira", value: "0caf57ab-3da9-4d27-b356-53837508aaf6" },
+  { label: "Layla — home", value: "ae2ea8c1-db28-47e3-b6ea-493e4ed3c554" },
+  { label: "Kiara", value: "42675ef1-2342-45d8-9603-9bd92ed45699" },
   { label: "Cara — desk", value: "30fa96d0-26c4-4e55-94a0-517025942e18" },
   { label: "Mia — studio", value: "edf6fdcb-acab-44b8-b974-ded72665ee26" },
   { label: "Liv — home", value: "071b0286-4cce-4808-bee2-e642f1062de3" },
@@ -18,8 +21,7 @@ export const ANAM_AVATAR_OPTIONS: AnamAvatarOption[] = [
   { label: "Finn — lean", value: "8a339c9f-0666-46bd-ab27-e90acd0409dc" },
   { label: "Sophie — sofa", value: "6dbc1e47-7768-403e-878a-94d7fcc3677b" },
   { label: "Hunter — table", value: "ecfb2ddb-80ec-4526-88a7-299a4738957c" },
-  { label: "Layla — home", value: "ae2ea8c1-db28-47e3-b6ea-493e4ed3c554" },
 ];
 
-/** Default Anam avatar (Cara — desk) */
-export const ANAM_DEFAULT_AVATAR_ID = "30fa96d0-26c4-4e55-94a0-517025942e18";
+/** Default Anam avatar (Samira). */
+export const ANAM_DEFAULT_AVATAR_ID = "0caf57ab-3da9-4d27-b356-53837508aaf6";
