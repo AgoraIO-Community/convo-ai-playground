@@ -28,15 +28,30 @@ export async function POST(): Promise<NextResponse> {
   const identity =
     appSession.user.email ?? appSession.user.name ?? "authenticated-user";
   const bucket = createHash("sha256").update(identity).digest("hex");
-  if (!(await consumeTeacherRateLimit(`session:${bucket}`, 10, 60))) {
+  try {
+    if (!(await consumeTeacherRateLimit(`session:${bucket}`, 10, 60))) {
+      return NextResponse.json(
+        { error: "Too many teacher sessions. Try again shortly." },
+        { status: 429 },
+      );
+    }
+    return NextResponse.json(await createTeacherSession(), {
+      headers: { "Cache-Control": "no-store" },
+    });
+  } catch (error) {
+    console.error("[teacher-session] shared storage unavailable", {
+      category: error instanceof Error ? error.name : "UnknownError",
+    });
     return NextResponse.json(
-      { error: "Too many teacher sessions. Try again shortly." },
-      { status: 429 },
+      {
+        error: "AI Teacher storage is temporarily unavailable. Please retry.",
+      },
+      {
+        status: 503,
+        headers: { "Cache-Control": "no-store" },
+      },
     );
   }
-  return NextResponse.json(await createTeacherSession(), {
-    headers: { "Cache-Control": "no-store" },
-  });
 }
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
