@@ -11,3 +11,8 @@ it("rejects substantial clearly wrong-language lessons but permits technical sni
   expect(() => assertTeacherLessonLocale(plan(portuguese), "pt-BR")).not.toThrow();
   expect(() => assertTeacherLessonLocale(plan("LLM → tool → feedback"), "pt-BR")).not.toThrow();
 });
+it("does not let a Portuguese topic hide entirely English speech", () => {
+  const mixed = plan(english);
+  mixed.topic = "Para que serve a fotossíntese?";
+  expect(() => assertTeacherLessonLocale(mixed, "pt-BR")).toThrow(/pt-BR/);
+});

@@ -157,7 +157,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
       updateInstructionLogEntry(id, { status: "sent" });
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Failed to send instruction";
+        labels ? m.instructionFailed : err instanceof Error ? err.message : "Failed to send instruction";
       updateInstructionLogEntry(id, {
         status: "error",
         errorMessage: message,
@@ -178,6 +178,8 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
     addInstructionLogEntry,
     updateInstructionLogEntry,
     addToast,
+    labels,
+    m.instructionFailed,
   ]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -198,12 +200,12 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
         return (
           <span className="inline-flex items-center gap-1 text-xs text-blue-500">
             <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-            Speaking...
+            {m.speaking}
           </span>
         );
       case ETurnStatus.INTERRUPTED:
         return (
-          <span className="text-xs text-orange-500 italic">Interrupted</span>
+          <span className="text-xs text-orange-500 italic">{m.interrupted}</span>
         );
       default:
         return null;
@@ -331,7 +333,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                     className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 shrink-0"
                     title={m.chatUnavailable}
                   >
-                    Transcript only
+                    {m.transcriptOnly}
                   </span>
                 )}
               </div>
@@ -376,8 +378,8 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
               <p className="text-sm">{m.empty}</p>
               <p className="text-xs mt-2">
                 {isRTMMode
-                  ? "Waiting for conversation to start..."
-                  : "Transcript will appear here when the agent speaks."}
+                  ? m.waiting
+                  : m.waitingSpeech}
               </p>
             </div>
           ) : (
@@ -409,12 +411,12 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                           </span>
                           {entry.status === "pending" && (
                             <span className="text-[10px] uppercase tracking-wide opacity-80">
-                              Sending...
+                              {m.sending}
                             </span>
                           )}
                           {entry.status === "error" && (
                             <span className="text-[10px] uppercase tracking-wide opacity-90">
-                              Failed
+                              {m.failed}
                             </span>
                           )}
                         </div>
@@ -573,7 +575,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                         ? "bg-white dark:bg-gray-900 text-purple-600 dark:text-purple-300 shadow-sm"
                         : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
-                    title="Send a custom instruction to the agent (v2.6 /think)"
+                    title={m.instructTitle}
                   >
                     <MdAutoAwesome size={14} />
                     {m.instruct}
@@ -623,7 +625,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                   <div className="grid grid-cols-3 gap-2">
                     <label className="flex flex-col gap-1">
                       <span className="text-gray-600 dark:text-gray-400">
-                        On listening
+                        {m.onListening}
                       </span>
                       <select
                         value={onListening}
@@ -640,7 +642,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                     </label>
                     <label className="flex flex-col gap-1">
                       <span className="text-gray-600 dark:text-gray-400">
-                        On thinking
+                        {m.onThinking}
                       </span>
                       <select
                         value={onThinking}
@@ -657,7 +659,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                     </label>
                     <label className="flex flex-col gap-1">
                       <span className="text-gray-600 dark:text-gray-400">
-                        On speaking
+                        {m.onSpeaking}
                       </span>
                       <select
                         value={onSpeaking}
@@ -681,18 +683,14 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                       className="accent-purple-500"
                     />
                     <span className="text-gray-700 dark:text-gray-300">
-                      Allow user speech to interrupt this instruction
+                      {m.allowInterruption}
                     </span>
                   </label>
                   {onListening === "inject" && (
                     <div className="flex items-start gap-2 p-2 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-800 dark:text-amber-300">
                       <MdInfoOutline size={14} className="mt-[2px] shrink-0" />
                       <span>
-                        <strong>inject</strong> adds the directive as a user
-                        turn, so it will appear in the transcript (as
-                        &quot;User&quot;) and trigger an immediate agent reply.
-                        Pick <strong>ignore</strong> for silent steering that
-                        only shapes the agent&apos;s next turn.
+                        {m.injectHelp}
                       </span>
                     </div>
                   )}
@@ -762,7 +760,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                         handleSendInstruction();
                       }
                     }}
-                    placeholder='e.g. "Be more concise" or "User clicked Buy now"'
+                    placeholder={m.instructionPlaceholder}
                     disabled={!isAgentActive || !agentId}
                     className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-purple-300 dark:border-purple-700 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 disabled:opacity-50"
                   />
@@ -775,7 +773,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                       isSendingInstruction
                     }
                     className="px-4 py-2 bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    title="Send instruction (v2.6 /think)"
+                    title={m.sendInstruction}
                   >
                     <MdAutoAwesome size={18} />
                   </button>

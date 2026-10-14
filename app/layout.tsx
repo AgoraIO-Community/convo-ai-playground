@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { readRequestTeacherLocale } from "@/locales/server";
 import { getTeacherLocaleProfile } from "@/locales";
+import { isAiTeacherModeEnabled } from "@/constants/featureFlags";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -12,6 +13,9 @@ const syne = Syne({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
+  if (!isAiTeacherModeEnabled()) {
+    return { title: "My Agora AI App", description: "Real-time video calling with Conversational AI agents, avatars, and collaboration tools — powered by Agora", icons: { icon: "/favicon.svg" } };
+  }
   const profile = getTeacherLocaleProfile(await readRequestTeacherLocale());
   return { ...profile.metadata, icons: { icon: "/favicon.svg" } };
 }
@@ -21,9 +25,9 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const initialLocale = await readRequestTeacherLocale();
+  const initialLocale = isAiTeacherModeEnabled() ? await readRequestTeacherLocale() : "en-US";
   return (
-    <html lang={initialLocale} className="dark">
+    <html lang={isAiTeacherModeEnabled() ? initialLocale : "en"} className="dark">
       <body className={syne.variable}>
         <Providers initialLocale={initialLocale}>{children}</Providers>
       </body>

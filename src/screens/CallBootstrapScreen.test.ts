@@ -155,7 +155,7 @@ describe("CallBootstrapScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enter classroom" }));
 
     expect(
-      await screen.findByText("Camera permission denied"),
+      await screen.findByText("Não foi possível preparar sua sala de aula"),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 

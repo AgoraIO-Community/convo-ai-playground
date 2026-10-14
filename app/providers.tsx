@@ -14,6 +14,7 @@ import {
 import { getDefaultSettings } from "@/components/SettingsSidebar";
 import { TeacherLocaleProvider } from "@/locales/TeacherLocaleProvider";
 import type { TeacherLocale } from "@/locales";
+import { isAiTeacherModeEnabled } from "@/constants/featureFlags";
 
 const queryClient = new QueryClient();
 
@@ -71,7 +72,7 @@ export function Providers({ children, initialLocale }: { children: React.ReactNo
   }, [setAgentSettings, setSelectedMicrophoneId]);
 
   return (
-    <TeacherLocaleProvider initialLocale={initialLocale}>
+    <TeacherLocaleProvider initialLocale={initialLocale} syncDocumentLanguage={isAiTeacherModeEnabled()}>
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
         {children}

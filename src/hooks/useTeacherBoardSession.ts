@@ -138,7 +138,7 @@ export function useTeacherBoardSession(
       return;
     }
     void runDemo(false);
-  }, [runDemo]);
+  }, [runDemo, demo.length]);
 
   const clearBoard = useCallback(() => {
     pauseDemo();

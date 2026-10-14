@@ -233,7 +233,7 @@ const TeacherDemoLandingScreen: React.FC<TeacherDemoLandingScreenProps> = ({
                 {m.landing.drawing}
               </span>
             </div>
-            <div className="relative aspect-[16/10] min-h-[320px] overflow-hidden rounded-[30px] border border-cyan-200/20 bg-[#020908] p-1 shadow-[0_32px_120px_rgba(8,145,178,0.18),0_0_0_1px_rgba(255,255,255,0.025)] sm:min-h-[440px]">
+            <div className="relative w-full min-w-0 max-w-full min-h-[320px] overflow-hidden rounded-[30px] border border-cyan-200/20 bg-[#020908] p-1 shadow-[0_32px_120px_rgba(8,145,178,0.18),0_0_0_1px_rgba(255,255,255,0.025)] sm:min-h-[440px] lg:aspect-[16/10]">
               <TeacherStage
                 active
                 variant="preview"

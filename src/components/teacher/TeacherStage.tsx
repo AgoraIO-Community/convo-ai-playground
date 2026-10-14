@@ -248,7 +248,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
 
           <div className="pointer-events-none absolute left-5 top-5 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-slate-100 shadow-lg backdrop-blur-xl sm:left-6 sm:top-6">
             <MdSchool className="text-base text-cyan-300" />
-            {m.brand.teacher}
+            {m.brand.shortTeacher}
           </div>
 
           <div

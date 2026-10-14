@@ -11,15 +11,15 @@ const TeacherLocaleContext = createContext<TeacherLocaleContextValue>({
   profile: getTeacherLocaleProfile(DEFAULT_TEACHER_LOCALE),
   setLocale: () => { throw new Error("TeacherLocaleProvider is required to change language."); },
 });
-export function TeacherLocaleProvider({ children, initialLocale }: { children: React.ReactNode; initialLocale: TeacherLocale }) {
+export function TeacherLocaleProvider({ children, initialLocale, syncDocumentLanguage = true }: { children: React.ReactNode; initialLocale: TeacherLocale; syncDocumentLanguage?: boolean }) {
   const [locale, updateLocale] = useState(() => parseTeacherLocale(initialLocale));
   const setLocale = useCallback((next: TeacherLocale) => {
     const valid = parseTeacherLocale(next);
     document.cookie = serializeTeacherLocaleCookie(valid, process.env.NODE_ENV === "production");
-    document.documentElement.lang = valid;
+    if (syncDocumentLanguage) document.documentElement.lang = valid;
     updateLocale(valid);
-  }, []);
-  useEffect(() => { document.documentElement.lang = locale; }, [locale]);
+  }, [syncDocumentLanguage]);
+  useEffect(() => { if (syncDocumentLanguage) document.documentElement.lang = locale; }, [locale, syncDocumentLanguage]);
   const value = useMemo(() => ({ locale, profile: getTeacherLocaleProfile(locale), setLocale }), [locale, setLocale]);
   return <TeacherLocaleContext.Provider value={value}>{children}</TeacherLocaleContext.Provider>;
 }
