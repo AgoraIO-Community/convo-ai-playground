@@ -29,13 +29,13 @@ describe("CallEndedScreen", () => {
     render(React.createElement(CallEndedScreen));
 
     expect(
-      screen.getByRole("heading", { name: "Lesson complete" }),
+      screen.getByRole("heading", { name: "Aula concluída" }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("teacher-classroom-board")).toContainElement(
-      screen.getByRole("status", { name: "Lesson complete" }),
+      screen.getByRole("status", { name: "Aula concluída" }),
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Start another lesson" }),
+      screen.getByRole("button", { name: "Começar outra aula" }),
     );
 
     expect(mocks.replace).toHaveBeenCalledWith("/classroom");

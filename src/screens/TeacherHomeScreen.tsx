@@ -20,7 +20,7 @@ const TeacherHomeScreen: React.FC<TeacherHomeScreenProps> = ({
       return;
     }
 
-    void signIn("google", { callbackUrl: "/classroom" });
+    void signIn("google", { callbackUrl: "/" });
   }, [isAuthenticated, router]);
 
   const handleSignOut = useCallback((): void => {
@@ -31,6 +31,7 @@ const TeacherHomeScreen: React.FC<TeacherHomeScreenProps> = ({
     <TeacherDemoLandingScreen
       phase="landing"
       requiresSignIn={!isAuthenticated}
+      showLanguagePicker={isAuthenticated}
       onEnter={handleEnter}
       onRetry={handleEnter}
       onSignOut={isAuthenticated ? handleSignOut : undefined}

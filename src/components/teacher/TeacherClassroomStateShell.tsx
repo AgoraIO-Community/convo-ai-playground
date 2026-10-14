@@ -1,3 +1,5 @@
+"use client";
+import { useTeacherLocale } from "@/locales/TeacherLocaleProvider";
 import type { ReactNode } from "react";
 import {
   MdArrowForward,
@@ -23,6 +25,8 @@ const toneClasses = {
 const TeacherClassroomStateShell: React.FC<
   TeacherClassroomStateShellProps
 > = ({ children, label, role = "status", tone = "cyan" }) => {
+  const { profile } = useTeacherLocale();
+  const m = profile.messages;
   const toneClass = toneClasses[tone];
 
   return (
@@ -30,10 +34,10 @@ const TeacherClassroomStateShell: React.FC<
       <header className="flex min-h-16 shrink-0 items-center border-b border-white/10 bg-slate-950/95 px-4 py-3 sm:px-6">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold sm:text-base">
-            AI Teacher classroom
+            {m.classroom.title}
           </p>
           <p className="hidden text-xs text-slate-400 sm:block">
-            Powered by Agora Conversational AI
+            {m.brand.poweredBy}
           </p>
         </div>
         <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-slate-300">
@@ -50,7 +54,7 @@ const TeacherClassroomStateShell: React.FC<
           <section
             data-testid="teacher-classroom-board"
             className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[26px] bg-[#020908] p-1.5 shadow-2xl sm:p-2"
-            aria-label="AI Teacher blackboard"
+            aria-label={m.stage.blackboard}
           >
             <div className="absolute inset-1.5 overflow-hidden rounded-[22px] border border-cyan-300/20 bg-[#111516] sm:inset-2">
               <div
@@ -65,7 +69,7 @@ const TeacherClassroomStateShell: React.FC<
 
             <div className="pointer-events-none absolute left-5 top-5 z-20 inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-slate-100 shadow-lg backdrop-blur-xl sm:left-6 sm:top-6">
               <MdSchool aria-hidden className="text-base text-cyan-300" />
-              AI Teacher
+              {m.brand.teacher}
             </div>
 
             <div

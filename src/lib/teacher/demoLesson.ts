@@ -1,8 +1,9 @@
+import type { TeacherLocale } from "@/locales";
 import type { TeacherCommandEvent } from "@/types/teacher";
 
 const turnId = "demo-photosynthesis";
 
-export const PHOTOSYNTHESIS_DEMO: TeacherCommandEvent[] = [
+const PHOTOSYNTHESIS_DEMO: TeacherCommandEvent[] = [
   {
     eventId: -1001,
     command: {
@@ -215,3 +216,18 @@ export const PHOTOSYNTHESIS_DEMO: TeacherCommandEvent[] = [
     },
   },
 ];
+
+export function getPhotosynthesisDemo(locale: TeacherLocale): TeacherCommandEvent[] {
+  const labels: Record<string, string> = locale === "pt-BR" ? {
+    "Photosynthesis": "Fotossíntese", "☀  Sunlight": "☀  Luz solar", "Water": "Água",
+    "Photosynthesis\n(in chloroplasts)": "Fotossíntese\n(nos cloroplastos)", "Glucose": "Glicose",
+    "Energy becomes\nstored food": "Energia vira\nalimento",
+  } : {};
+  return PHOTOSYNTHESIS_DEMO.map(event => ({
+    ...event, command: { ...event.command, operations: event.command.operations.map(operation => ({
+      ...operation,
+      ...("text" in operation ? { text: labels[operation.text] ?? operation.text } : {}),
+      ...("label" in operation && operation.label ? { label: labels[operation.label] ?? operation.label } : {}),
+    })) },
+  }));
+}

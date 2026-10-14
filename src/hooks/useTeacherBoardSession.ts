@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyTeacherCommand,
   clearTeacherBoard,
   INITIAL_TEACHER_BOARD_STATE,
 } from "@/lib/teacher/boardReducer";
-import { PHOTOSYNTHESIS_DEMO } from "@/lib/teacher/demoLesson";
+import { getPhotosynthesisDemo } from "@/lib/teacher/demoLesson";
+import { DEFAULT_TEACHER_LOCALE, type TeacherLocale } from "@/locales";
 import type { EAgentState } from "@/types/agora";
 import type {
   TeacherBoardState,
@@ -32,6 +33,7 @@ export interface UseTeacherBoardSessionResult {
 
 export interface UseTeacherBoardSessionOptions {
   connectRemote?: boolean;
+  locale?: TeacherLocale;
 }
 
 function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {
@@ -56,6 +58,8 @@ export function useTeacherBoardSession(
   _agentState: EAgentState,
   options: UseTeacherBoardSessionOptions = {},
 ): UseTeacherBoardSessionResult {
+  const locale = options.locale ?? DEFAULT_TEACHER_LOCALE;
+  const demo = useMemo(() => getPhotosynthesisDemo(locale), [locale]);
   const connectRemote = options.connectRemote ?? true;
   const [session, setSession] = useState<TeacherSessionCredentials | null>(null);
   const [boardState, setBoardState] = useState<TeacherBoardState>(
@@ -102,7 +106,7 @@ export function useTeacherBoardSession(
       setBoardState((current) => clearTeacherBoard(current));
     }
 
-    while (demoIndexRef.current < PHOTOSYNTHESIS_DEMO.length) {
+    while (demoIndexRef.current < demo.length) {
       if (
         !mountedRef.current ||
         demoTokenRef.current !== token ||
@@ -112,7 +116,7 @@ export function useTeacherBoardSession(
         return;
       }
 
-      const event = PHOTOSYNTHESIS_DEMO[demoIndexRef.current];
+      const event = demo[demoIndexRef.current];
       setActiveAnimation(
         reduceMotionRef.current ? "instant" : event.command.animation,
       );
@@ -121,14 +125,14 @@ export function useTeacherBoardSession(
       if (!reduceMotionRef.current) await wait(DEMO_STEP_MS);
     }
     demoRunningRef.current = false;
-  }, []);
+  }, [demo]);
 
   const playDemo = useCallback(() => runDemo(true), [runDemo]);
 
   const resumeDemo = useCallback(() => {
     if (
       demoRunningRef.current ||
-      demoIndexRef.current >= PHOTOSYNTHESIS_DEMO.length
+      demoIndexRef.current >= demo.length
     ) {
       return;
     }

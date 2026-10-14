@@ -1,5 +1,6 @@
 "use client";
 
+import { useTeacherLocale } from "@/locales/TeacherLocaleProvider";
 import { useCallback } from "react";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -8,6 +9,8 @@ import TeacherClassroomStateShell from "@/components/teacher/TeacherClassroomSta
 import { isAiTeacherModeEnabled } from "@/constants/featureFlags";
 
 const CallEndedScreen: React.FC = () => {
+  const { profile } = useTeacherLocale();
+  const m = profile.messages;
   const router = useRouter();
   const teacherModeEnabled = isAiTeacherModeEnabled();
 
@@ -58,16 +61,16 @@ const CallEndedScreen: React.FC = () => {
   }
 
   return (
-    <TeacherClassroomStateShell label="Lesson complete" tone="emerald">
+    <TeacherClassroomStateShell label={m.callEnded.title} tone="emerald">
       <div className="max-w-lg">
         <div className="mx-auto grid h-12 w-12 place-items-center rounded-full border border-emerald-300/20 bg-emerald-400/10 text-xl text-emerald-200">
           <MdCheck aria-hidden />
         </div>
         <h1 className="mt-5 text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl">
-          Lesson complete
+          {m.callEnded.title}
         </h1>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-300">
-          Your classroom is ready whenever you want to explore another idea.
+          {m.callEnded.description}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2.5">
           <button
@@ -75,7 +78,7 @@ const CallEndedScreen: React.FC = () => {
             onClick={handleStartNewCall}
             className="group inline-flex h-11 items-center justify-center gap-2 rounded-full bg-cyan-300 px-5 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-200 focus:ring-offset-2 focus:ring-offset-slate-950"
           >
-            Start another lesson
+            {m.callEnded.start}
             <MdArrowForward
               aria-hidden
               className="transition-transform group-hover:translate-x-0.5"
@@ -87,7 +90,7 @@ const CallEndedScreen: React.FC = () => {
             className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/15 bg-slate-950/55 px-5 text-sm font-semibold text-slate-200 transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30"
           >
             <MdLogout aria-hidden />
-            Sign out
+            {m.controls.signOut}
           </button>
         </div>
       </div>

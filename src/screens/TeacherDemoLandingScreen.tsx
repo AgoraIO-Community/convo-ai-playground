@@ -1,5 +1,7 @@
 "use client";
 
+import TeacherLanguagePicker from "@/components/teacher/TeacherLanguagePicker";
+import { useTeacherLocale } from "@/locales/TeacherLocaleProvider";
 import { useEffect } from "react";
 import {
   MdArrowForward,
@@ -20,27 +22,33 @@ interface TeacherDemoLandingScreenProps {
   phase: TeacherLandingPhase;
   errorMessage?: string;
   requiresSignIn?: boolean;
+  showLanguagePicker?: boolean;
   onEnter(): void;
   onRetry(): void;
   onSignOut?: () => void;
 }
 
-const capabilities = [
-  { label: "Speak naturally", icon: MdGraphicEq },
-  { label: "Interrupt anytime", icon: MdOutlineTouchApp },
-  { label: "Visual explanations", icon: MdAutoAwesome },
+const capabilityIcons = [
+  MdGraphicEq,
+  MdOutlineTouchApp,
+  MdAutoAwesome,
 ] as const;
 
 const TeacherDemoLandingScreen: React.FC<TeacherDemoLandingScreenProps> = ({
   phase,
   errorMessage,
   requiresSignIn = false,
+  showLanguagePicker = false,
   onEnter,
   onRetry,
   onSignOut,
 }) => {
+  const { locale, profile } = useTeacherLocale();
+  const m = profile.messages;
+  const capabilities = [m.landing.speak, m.landing.interrupt, m.landing.visual].map((label, index) => ({ label, icon: capabilityIcons[index] }));
   const teacher = useTeacherBoardSession(EAgentState.SPEAKING, {
     connectRemote: false,
+    locale,
   });
   const playDemo = teacher.playDemo;
   const pauseDemo = teacher.pauseDemo;
@@ -98,26 +106,25 @@ const TeacherDemoLandingScreen: React.FC<TeacherDemoLandingScreenProps> = ({
         <section className="flex min-w-0 flex-col items-start lg:py-4">
           <div className="inline-flex items-center gap-2 rounded-full border border-cyan-200/15 bg-cyan-300/[0.06] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-200 shadow-[0_0_32px_rgba(34,211,238,0.08)]">
             <MdSchool aria-hidden className="text-base" />
-            AI Teacher
+            {m.brand.teacher}
           </div>
 
           <div className="mt-6 max-w-2xl lg:mt-7">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.26em] text-slate-500">
-              The classroom, reimagined
+              {m.landing.eyebrow}
             </p>
             <h1 className="font-[Georgia,ui-serif,serif] text-[clamp(2.8rem,4.8vw,5.8rem)] leading-[0.88] font-normal tracking-[-0.055em] text-slate-50">
-              Teach anything.
+              {m.landing.title}
               <span className="mt-2 block bg-gradient-to-r from-cyan-200 via-sky-300 to-indigo-300 bg-clip-text italic text-transparent">
-                Make it visible.
+                {m.landing.accent}
               </span>
             </h1>
             <p className="mt-5 max-w-xl text-base leading-7 text-slate-300 sm:text-lg sm:leading-8">
-              A conversational teacher that listens, explains, and builds the
-              lesson on a living blackboard—one idea at a time.
+              {m.landing.description}
             </p>
           </div>
 
-          <ul className="mt-5 flex max-w-xl flex-wrap gap-2.5" aria-label="AI Teacher capabilities">
+          <ul className="mt-5 flex max-w-xl flex-wrap gap-2.5" aria-label={m.landing.capabilities}>
             {capabilities.map(({ label, icon: Icon }) => (
               <li
                 key={label}
@@ -134,13 +141,14 @@ const TeacherDemoLandingScreen: React.FC<TeacherDemoLandingScreenProps> = ({
               role="alert"
               className="mt-4 w-full max-w-xl rounded-2xl border border-rose-300/20 bg-rose-400/[0.08] px-4 py-3 text-sm text-rose-100"
             >
-              <p className="font-semibold">The classroom could not connect.</p>
+              <p className="font-semibold">{m.classroom.failed}</p>
               <p className="mt-1 text-rose-100/75">
-                {errorMessage || "Please try joining again."}
+                {errorMessage || m.classroom.retryHint}
               </p>
             </div>
           ) : null}
 
+          {showLanguagePicker ? <div className="mt-5"><TeacherLanguagePicker /></div> : null}
           <div className="mt-6 flex w-full max-w-xl flex-col gap-3 sm:flex-row sm:items-center">
             <button
               type="button"
@@ -180,12 +188,12 @@ const TeacherDemoLandingScreen: React.FC<TeacherDemoLandingScreenProps> = ({
                 </svg>
               ) : null}
               {isJoining
-                ? "Connecting classroom…"
+                ? m.landing.connecting
                 : isError
-                  ? "Try again"
+                  ? m.landing.retry
                   : requiresSignIn
-                    ? "Sign in to enter the classroom"
-                    : "Enter the classroom"}
+                    ? m.landing.signIn
+                    : m.landing.enter}
               {!isJoining ? (
                 <MdArrowForward
                   aria-hidden
@@ -201,28 +209,28 @@ const TeacherDemoLandingScreen: React.FC<TeacherDemoLandingScreenProps> = ({
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium text-slate-400 transition hover:bg-white/[0.05] hover:text-white focus:outline-none focus:ring-2 focus:ring-white/30 motion-reduce:transition-none"
               >
                 <MdLogout aria-hidden />
-                Sign out
+                {m.controls.signOut}
               </button>
             ) : null}
           </div>
 
           <div className="mt-6 flex items-center gap-3 text-xs text-slate-500">
             <span aria-hidden className="h-px w-8 bg-gradient-to-r from-cyan-300/70 to-transparent" />
-            Powered by Agora Conversational AI
+            {m.brand.poweredBy}
           </div>
         </section>
 
-        <section className="relative min-w-0 pb-3 lg:py-4" aria-label="Live classroom demonstration">
+        <section className="relative min-w-0 pb-3 lg:py-4" aria-label={m.landing.demonstration}>
           <div
             aria-hidden
             className="absolute -inset-8 rounded-[44px] bg-cyan-300/[0.045] blur-3xl"
           />
           <div className="relative">
             <div className="mb-3 flex items-center justify-between px-2 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
-              <span>Live classroom preview</span>
+              <span>{m.landing.preview}</span>
               <span className="inline-flex items-center gap-2 text-cyan-200/70">
                 <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 motion-safe:animate-pulse motion-reduce:animate-none" />
-                Drawing now
+                {m.landing.drawing}
               </span>
             </div>
             <div className="relative aspect-[16/10] min-h-[320px] overflow-hidden rounded-[30px] border border-cyan-200/20 bg-[#020908] p-1 shadow-[0_32px_120px_rgba(8,145,178,0.18),0_0_0_1px_rgba(255,255,255,0.025)] sm:min-h-[440px]">
@@ -237,9 +245,9 @@ const TeacherDemoLandingScreen: React.FC<TeacherDemoLandingScreenProps> = ({
               />
             </div>
             <div className="mt-4 grid grid-cols-3 gap-2 text-[10px] uppercase tracking-[0.16em] text-slate-600 sm:text-xs">
-              <span>01 · Listen</span>
-              <span className="text-center">02 · Visualize</span>
-              <span className="text-right">03 · Understand</span>
+              <span>01 · {m.landing.listen}</span>
+              <span className="text-center">02 · {m.landing.visualize}</span>
+              <span className="text-right">03 · {m.landing.understand}</span>
             </div>
           </div>
         </section>

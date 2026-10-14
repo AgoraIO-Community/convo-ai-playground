@@ -8,7 +8,7 @@ describe("TeacherClassroomLoadingScreen", () => {
 
     const board = screen.getByTestId("teacher-classroom-board");
     const status = screen.getByRole("status", {
-      name: "Preparing your classroom",
+      name: "Preparando sua sala de aula",
     });
 
     expect(board).toContainElement(status);
@@ -31,8 +31,8 @@ describe("TeacherClassroomLoadingScreen", () => {
     const alert = screen.getByRole("alert");
     expect(board).toContainElement(alert);
 
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sair" }));
 
     expect(onRetry).toHaveBeenCalledOnce();
     expect(onSignOut).toHaveBeenCalledOnce();
