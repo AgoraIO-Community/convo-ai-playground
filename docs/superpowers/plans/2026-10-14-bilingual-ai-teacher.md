@@ -484,7 +484,7 @@ git commit -m "feat: add classroom language switching"
 - Consumes: the completed bilingual feature.
 - Produces: verification evidence; no new product interface.
 
-- [ ] **Step 1: Run the full automated suite**
+- [x] **Step 1: Run the full automated suite**
 
 Run: `npm test`
 
@@ -496,7 +496,9 @@ Run: `npx tsc --noEmit && npm run build`
 
 Expected: TypeScript and Next.js production build exit 0.
 
-- [ ] **Step 3: Start the feature worktree locally**
+Actual: production build and application-only TypeScript pass; standalone repository-wide TypeScript retains 57 existing unrelated test-fixture errors. See the verification report.
+
+- [x] **Step 3: Start the feature worktree locally**
 
 Run: `npm run dev`
 
@@ -510,13 +512,13 @@ Use a clean browser cookie state. Verify Portuguese landing and Google CTA, auth
 
 Stop the agent, select English, confirm the board/transcript reset and immediate UI change, start a new agent, and verify English ASR, greeting, lesson speech, diagram text, controls, and follow-up handling. Refresh and confirm English persists; clear the cookie and confirm the default returns to `pt-BR`.
 
-- [ ] **Step 6: Review the final diff for preserved integrations**
+- [x] **Step 6: Review the final diff for preserved integrations**
 
 Run: `git diff ec9deb7...HEAD --check && git status --short`
 
 Expected: no whitespace errors, no credentials, no `.superpowers/` changes, and only the planned localization/runtime/test files plus the approved spec and plan.
 
-- [ ] **Step 7: Commit verification-only repairs, if any**
+- [x] **Step 7: Commit verification-only repairs, if any**
 
 If Steps 1–6 required a repair, stage only the owned files and commit:
 
