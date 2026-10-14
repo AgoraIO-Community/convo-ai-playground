@@ -1,5 +1,7 @@
 "use client";
 
+import { getTeacherLocaleProfile, type TeacherLocale } from "@/locales";
+import { classifyTeacherIntent, isUnfinishedQuestionStem, normalizeLearnerText } from "@/lib/teacher/teacherIntents";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   interruptAgent,
@@ -26,9 +28,9 @@ const BOARD_ACK_TIMEOUT_MS = 3_000;
 const POLL_INTERVAL_MS = 25;
 const VOICE_COALESCE_MS = 800;
 const LOGICAL_DUPLICATE_WINDOW_MS = 5_000;
-const RETURN_PHRASE = "Now, let's return to the main idea.";
 
 interface UseTeacherLessonDirectorOptions {
+  locale: TeacherLocale;
   active: boolean;
   agentId: string | null;
   agentState: EAgentState;
@@ -110,24 +112,6 @@ function isLessonPlan(value: unknown): value is TeacherLessonPlan {
   );
 }
 
-function normalizeLearnerText(value: string): string {
-  return value
-    .toLocaleLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function isUnfinishedQuestionStem(value: string): boolean {
-  const normalized = normalizeLearnerText(value);
-  return (
-    /^(?:how|what|why|when|where|who|which)\s+(?:do|does|did|is|are|was|were|can|could|would|will|should|has|have|had)$/.test(
-      normalized,
-    ) ||
-    /^(?:can|could|would|will|should)\s+you$/.test(normalized)
-  );
-}
-
 function areEquivalentTurns(left: string, right: string): boolean {
   if (left === right) return true;
   if (!left || !right) return false;
@@ -149,45 +133,6 @@ function turnFingerprint(value: string): string {
     hash = Math.imul(hash, 16_777_619);
   }
   return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
-function isResumeIntent(value: string): boolean {
-  return /^(continue|go on|please continue|carry on|resume|keep going)$/.test(
-    normalizeLearnerText(value),
-  );
-}
-
-function isClearBoardIntent(value: string): boolean {
-  const normalized = normalizeLearnerText(value);
-  return (
-    /\b(clear|reset|erase|wipe)\b.*\b(board|blackboard|canvas)\b/.test(
-      normalized,
-    ) ||
-    /\b(start over|start again)\b.*\b(clean|blank|empty)\b.*\b(board|blackboard|canvas)\b/.test(
-      normalized,
-    )
-  );
-}
-
-function isStopIntent(value: string): boolean {
-  const normalized = normalizeLearnerText(value);
-  if (normalized.length > 100) return false;
-  if (/\b(don t|do not|never)\s+(stop|pause)\b/.test(normalized)) {
-    return false;
-  }
-  return (
-    /^(please\s+)?(stop|pause|hold on|hang on|wait)\b/.test(normalized) ||
-    /\b(can|could|would|will) you (please )?(stop|pause|hold on|hang on|wait)\b/.test(
-      normalized,
-    ) ||
-    /\b(that s|that is|thats) enough\b/.test(normalized)
-  );
-}
-
-function isExplicitTopicReplacement(value: string): boolean {
-  return /\b(new topic|switch to|instead|teach me about something else)\b/.test(
-    normalizeLearnerText(value),
-  );
 }
 
 function buildContext(
@@ -232,7 +177,7 @@ async function requestLessonPlan(
   parentTopic?: string,
 ): Promise<TeacherLessonPlan> {
   if (!options.teacherSession) {
-    throw new TeacherLessonRequestError("Teacher board is not ready.", 503);
+    throw new TeacherLessonRequestError(getTeacherLocaleProfile(options.locale).messages.lesson.notReady, 503);
   }
   const response = await fetch(
     `/api/teacher/lesson?sessionId=${encodeURIComponent(options.teacherSession.sessionId)}`,
@@ -244,6 +189,7 @@ async function requestLessonPlan(
       },
       body: JSON.stringify({
         question,
+        locale: options.locale,
         mode,
         parentTopic,
         context: buildContext(options.transcriptItems, options.localUID),
@@ -258,12 +204,12 @@ async function requestLessonPlan(
   };
   if (!response.ok) {
     throw new TeacherLessonRequestError(
-      body.error || "Unable to prepare the lesson.",
+      getTeacherLocaleProfile(options.locale).messages.lesson.requestFailed,
       response.status,
     );
   }
   if (!isLessonPlan(body.plan)) {
-    throw new TeacherLessonRequestError("Invalid lesson plan response.", 502);
+    throw new TeacherLessonRequestError(getTeacherLocaleProfile(options.locale).messages.lesson.invalid, 502);
   }
   return body.plan;
 }
@@ -274,6 +220,7 @@ export function useTeacherLessonDirector(
   const [status, setStatus] = useState<TeacherLessonStatus>("idle");
   const [progress, setProgress] = useState<TeacherLessonProgress | null>(null);
   const optionsRef = useRef(options);
+  const previousLocaleRef = useRef(options.locale);
   const abortRef = useRef<AbortController | null>(null);
   const generationRef = useRef(0);
   const activeKindRef = useRef<ActiveLessonKind>(null);
@@ -312,6 +259,7 @@ export function useTeacherLessonDirector(
       voiceTimerRef.current = null;
     }
     pendingVoiceRef.current = null;
+    recentLogicalTurnsRef.current = [];
     setProgress(null);
     setStatus("idle");
   }, [cancelActiveExecution]);
@@ -378,7 +326,7 @@ export function useTeacherLessonDirector(
           return;
         }
         if (Date.now() - startedAt >= BOARD_ACK_TIMEOUT_MS) {
-          throw new Error("The board did not acknowledge the lesson cue.");
+          throw new Error(getTeacherLocaleProfile(optionsRef.current.locale).messages.lesson.boardAck);
         }
         await wait(POLL_INTERVAL_MS, signal);
       }
@@ -437,7 +385,7 @@ export function useTeacherLessonDirector(
         const current = optionsRef.current;
         if (!current.agentId || !current.teacherSession || !current.active) {
           throw new TeacherLessonRequestError(
-            "Teacher session ended during the lesson.",
+            getTeacherLocaleProfile(current.locale).messages.lesson.ended,
             503,
           );
         }
@@ -500,7 +448,7 @@ export function useTeacherLessonDirector(
       if (isAbortError(error) || generation !== generationRef.current) return;
       const details = {
         category: error instanceof Error ? error.name : "UnknownError",
-        message: error instanceof Error ? error.message : "Unknown error",
+        locale: optionsRef.current.locale,
         ...(error instanceof TeacherLessonRequestError && {
           status: error.status,
         }),
@@ -589,11 +537,11 @@ export function useTeacherLessonDirector(
           setStatus("explaining");
           await speakAgent({
             agentId: initial.agentId,
-            text: RETURN_PHRASE,
+            text: getTeacherLocaleProfile(optionsRef.current.locale).lessonDirector.returnPhrase,
             priority: "INTERRUPT",
             interruptable: true,
           });
-          await waitForSpeech(RETURN_PHRASE, controller.signal);
+          await waitForSpeech(getTeacherLocaleProfile(optionsRef.current.locale).lessonDirector.returnPhrase, controller.signal);
         }
         await executePlan(
           frame.plan,
@@ -671,11 +619,11 @@ export function useTeacherLessonDirector(
         setStatus("explaining");
         await speakAgent({
           agentId: initial.agentId,
-          text: RETURN_PHRASE,
+          text: getTeacherLocaleProfile(optionsRef.current.locale).lessonDirector.returnPhrase,
           priority: "APPEND",
           interruptable: true,
         });
-        await waitForSpeech(RETURN_PHRASE, controller.signal);
+        await waitForSpeech(getTeacherLocaleProfile(optionsRef.current.locale).lessonDirector.returnPhrase, controller.signal);
         activeKindRef.current = "main";
         await executePlan(
           frame.plan,
@@ -713,13 +661,13 @@ export function useTeacherLessonDirector(
       const normalized = normalizeLearnerText(question);
       if (!normalized) return;
 
-      if (isClearBoardIntent(question)) {
+      const intent = classifyTeacherIntent(question, optionsRef.current.locale);
+      if (intent === "clear") {
         await clearCurrentLesson();
         return;
       }
       if (
-        isStopIntent(question) &&
-        !isExplicitTopicReplacement(question)
+        intent === "stop"
       ) {
         await pauseCurrentLesson();
         return;
@@ -740,13 +688,13 @@ export function useTeacherLessonDirector(
       if (duplicate) return;
       recentLogicalTurnsRef.current.push({ text: normalized, at: now });
 
-      if (isResumeIntent(question) && mainFrameRef.current) {
+      if (intent === "resume" && mainFrameRef.current) {
         if (activeKindRef.current === "main" && abortRef.current) return;
         await resumeMainLesson(false);
         return;
       }
 
-      if (mainFrameRef.current && !isExplicitTopicReplacement(question)) {
+      if (mainFrameRef.current && intent !== "replace") {
         await runClarification(question, fromVoice);
         return;
       }
@@ -843,7 +791,7 @@ export function useTeacherLessonDirector(
       const pending = pendingVoiceRef.current;
       pendingVoiceRef.current = null;
       if (!pending || !optionsRef.current.active) return;
-      if (isUnfinishedQuestionStem(pending.text)) {
+      if (isUnfinishedQuestionStem(pending.text, optionsRef.current.locale)) {
         console.info("[teacher-director] waiting for voice turn completion", {
           fingerprint: pending.fingerprint,
         });
@@ -871,6 +819,14 @@ export function useTeacherLessonDirector(
     options.agentId,
     options.teacherSession,
   ]);
+
+  useEffect(() => {
+    if (previousLocaleRef.current === options.locale) return;
+    previousLocaleRef.current = options.locale;
+    cancelLesson();
+    seenVoiceTurnsRef.current.clear();
+    seenVoiceActivityRef.current.clear();
+  }, [options.locale, cancelLesson]);
 
   useEffect(
     () => () => {

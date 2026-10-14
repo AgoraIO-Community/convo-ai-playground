@@ -43,6 +43,7 @@ describe("useTeacherLessonDirector", () => {
       .mockImplementation(() => undefined);
     const { result } = renderHook(() =>
       useTeacherLessonDirector({
+        locale: "en-US",
         active: true,
         agentId: "agent-1",
         agentState: EAgentState.LISTENING,
@@ -80,6 +81,7 @@ describe("useTeacherLessonDirector", () => {
     const { rerender } = renderHook(
       ({ transcriptItems }) =>
         useTeacherLessonDirector({
+          locale: "en-US",
           active: true,
           agentId: "agent-1",
           agentState: EAgentState.LISTENING,
@@ -120,6 +122,49 @@ describe("useTeacherLessonDirector", () => {
     const request = vi.mocked(fetch).mock.calls[0]?.[1];
     expect(JSON.parse(String(request?.body))).toMatchObject({
       question: "How does an AI agent work?",
+      locale: "en-US",
     });
+  });
+});
+
+describe("Portuguese teacher turns", () => {
+  it("does not discard a complete voice turn when the director mounts", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({ error: "temporary" }), { status: 502 }));
+    renderHook(() => useTeacherLessonDirector({
+      locale: "pt-BR", active: true, agentId: "agent-pt", agentState: EAgentState.LISTENING, localUID: "42",
+      transcriptItems: [{ uid: "42", stream_id: 7, turn_id: 2, _time: 1, text: "Como funciona um agente de IA?", status: ETurnStatus.END, metadata: null }],
+      teacherSession: { sessionId: "session", token: "token", expiresAt: Date.now() + 60000, liveMcpConfigured: true },
+      boardState: INITIAL_TEACHER_BOARD_STATE, clearBoard: vi.fn(),
+    }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    fetchMock.mockRestore();
+    vi.useRealTimers();
+  });
+  it("routes a Brazilian clear command without planning another lesson", async () => {
+    const clearBoard = vi.fn();
+    const fetchMock = vi.spyOn(global, "fetch");
+    const { result } = renderHook(() => useTeacherLessonDirector({
+      locale: "pt-BR", active: true, agentId: "agent-pt", agentState: EAgentState.LISTENING, localUID: "42",
+      transcriptItems: [], teacherSession: { sessionId: "session", token: "token", expiresAt: Date.now() + 60000, liveMcpConfigured: true },
+      boardState: INITIAL_TEACHER_BOARD_STATE, clearBoard,
+    }));
+    await act(async () => { await result.current.sendTeacherQuestion("Pode limpar o quadro?"); });
+    expect(clearBoard).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
+    fetchMock.mockRestore();
+  });
+  it("sends the full Brazilian question with its selected locale", async () => {
+    const fetchMock = vi.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({ error: "temporary" }), { status: 502 }));
+    const { result } = renderHook(() => useTeacherLessonDirector({
+      locale: "pt-BR", active: true, agentId: "agent-pt", agentState: EAgentState.LISTENING, localUID: "42",
+      transcriptItems: [], teacherSession: { sessionId: "session", token: "token", expiresAt: Date.now() + 60000, liveMcpConfigured: true },
+      boardState: INITIAL_TEACHER_BOARD_STATE, clearBoard: vi.fn(),
+    }));
+    await act(async () => { await result.current.sendTeacherQuestion("Como funciona um agente de IA?"); });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({ question: "Como funciona um agente de IA?", locale: "pt-BR" });
+    expect(result.current.status).toBe("error");
+    fetchMock.mockRestore();
   });
 });

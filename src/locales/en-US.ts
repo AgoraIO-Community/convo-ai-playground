@@ -25,9 +25,9 @@ export const enUS: TeacherLocaleProfile = {
   intents: {
     resume: /^(continue|go on|please continue|carry on|resume|keep going)$/,
     clear: /\b(clear|reset|erase|wipe)\b.*\b(board|blackboard|canvas)\b|\b(start over|start again)\b.*\b(clean|blank|empty)\b.*\b(board|blackboard|canvas)\b/,
-    stop: /^(please\s+)?(stop|pause|hold on|hang on|wait)\b|\b(can|could|would|will) you (please )?(stop|pause|hold on|hang on|wait)\b/,
+    stop: /^(please\s+)?(stop|pause|hold on|hang on|wait)\b|\b(can|could|would|will) you (please )?(stop|pause|hold on|hang on|wait)\b|\b(that s|that is|thats) enough\b/,
     negatedStop: /\b(don t|do not|never)\s+(stop|pause)\b/,
-    replace: /\b(instead|new topic|change (the )?topic|switch (the )?topic|different topic)\b/,
+    replace: /\b(instead|new topic|change (the )?topic|switch (the )?topic|different topic|switch to|teach me about something else)\b/,
     unfinished: /^(?:(how|what|why|when|where|who|which)\s+(do|does|did|is|are|was|were|can|could|would|will|should|has|have|had)|(can|could|would|will|should)\s+you)$/,
   },
 };
