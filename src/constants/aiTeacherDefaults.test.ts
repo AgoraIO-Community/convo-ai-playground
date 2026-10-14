@@ -36,6 +36,25 @@ function createSettings(): AgentSettings {
 }
 
 describe("withAiTeacherRuntimeDefaults", () => {
+  it("applies Brazilian Portuguese at runtime without mutating saved providers", () => {
+    const settings = createSettings();
+    settings.asr = { vendor: "microsoft", language: "en-US", params: { region: "westus", key: "azure-key" } };
+    const result = withAiTeacherRuntimeDefaults(settings, "pt-BR");
+    expect(result.asr).toMatchObject({ vendor: "deepgram", language: "pt-BR", params: { model: "nova-3", language: "pt-BR" } });
+    expect(result.asr?.params).not.toHaveProperty("region");
+    expect(result.asr?.params).not.toHaveProperty("key");
+    expect(result.llm.greeting_message).toContain("sua professora");
+    expect(result.llm.system_messages?.[0].content).toContain("Brazilian Portuguese");
+    expect(result.tts).toEqual(settings.tts);
+    expect(settings.asr.vendor).toBe("microsoft");
+  });
+  it("uses English ASR and greeting after selection and preserves Deepgram credentials", () => {
+    const settings = createSettings();
+    settings.asr = { vendor: "deepgram", params: { key: "dg-key", model: "nova-2", language: "fr" } };
+    const result = withAiTeacherRuntimeDefaults(settings, "en-US");
+    expect(result.asr).toMatchObject({ language: "en-US", params: { key: "dg-key", model: "nova-3", language: "en-US" } });
+    expect(result.llm.greeting_message).toContain("I'm Samira");
+  });
   it("introduces the visual teacher as Samira", () => {
     expect(AI_TEACHER_SYSTEM_PROMPT).toContain("You are Samira");
     expect(AI_TEACHER_GREETING).toContain("I'm Samira");

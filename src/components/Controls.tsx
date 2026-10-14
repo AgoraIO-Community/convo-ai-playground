@@ -13,6 +13,7 @@ import {
   MdVideocam,
   MdVideocamOff,
 } from "react-icons/md";
+import { useTeacherLocale } from "@/locales/TeacherLocaleProvider";
 import { inviteAgent, stopAgent, updateAgent } from "@/api/agentApi";
 import AgentGlyph from "@/components/AgentGlyph";
 import SettingsSidebar from "@/components/SettingsSidebar";
@@ -92,6 +93,8 @@ const Controls: React.FC<ControlsProps> = ({
   onTeacherModeToggle,
   teacherModeLoading = false,
 }) => {
+  const { locale, profile } = useTeacherLocale();
+  const teacherCopy = experienceMode === "teacher" ? profile.messages.controls : null;
   const audioMuted = useAppStore((state) => state.audioMuted);
   const videoMuted = useAppStore((state) => state.videoMuted);
   const channelId = useAppStore((state) => state.channelId);
@@ -147,9 +150,9 @@ const Controls: React.FC<ControlsProps> = ({
     try {
       await toggleLocalAudio();
     } catch {
-      showToast("Failed to toggle microphone", "error");
+      showToast(teacherCopy?.micFailed ?? "Failed to toggle microphone", "error");
     }
-  }, [toggleLocalAudio]);
+  }, [toggleLocalAudio, teacherCopy]);
 
   const handleVideoToggle = useCallback(async (): Promise<void> => {
     try {
@@ -176,7 +179,7 @@ const Controls: React.FC<ControlsProps> = ({
   const handleInviteAgent = useCallback(async (): Promise<void> => {
     if (isAgentActive || isAgentLoading) return;
     if (!localUID || !channelId) {
-      showToast("The call is not ready for the agent yet.", "error");
+      showToast(teacherCopy?.notReady ?? "The call is not ready for the agent yet.", "error");
       return;
     }
     if (!agentSettings) {
@@ -185,7 +188,7 @@ const Controls: React.FC<ControlsProps> = ({
     }
     if (experienceMode === "teacher" && !teacherSession) {
       showToast(
-        "The teacher board is still preparing. Try again in a moment.",
+        profile.messages.controls.boardNotReady,
         "info",
       );
       return;
@@ -222,7 +225,7 @@ const Controls: React.FC<ControlsProps> = ({
 
       const experienceSettings =
         experienceMode === "teacher"
-          ? withAiTeacherRuntimeDefaults(agentSettings)
+          ? withAiTeacherRuntimeDefaults(agentSettings, locale)
           : agentSettings;
       const normalizedSettings = withTranscriptTransport(experienceSettings);
       const customAdvancedFeatures = customJoinPayload?.properties
@@ -259,12 +262,12 @@ const Controls: React.FC<ControlsProps> = ({
         joinedAt: Date.now(),
         channelId,
       });
-      showToast("AI agent joined the call", "success");
+      showToast(teacherCopy?.joined ?? "AI agent joined the call", "success");
     } catch (error) {
       console.error("Unable to start the AI agent", error);
       setAgentLoading(false);
       showToast(
-        error instanceof Error ? error.message : "Failed to start AI agent",
+        teacherCopy?.startFailed ?? (error instanceof Error ? error.message : "Failed to start AI agent"),
         "error",
       );
     }
@@ -272,6 +275,9 @@ const Controls: React.FC<ControlsProps> = ({
     agentSettings,
     channelId,
     configureRtm,
+    locale,
+    profile,
+    teacherCopy,
     experienceMode,
     isAgentActive,
     isAgentLoading,
@@ -316,14 +322,14 @@ const Controls: React.FC<ControlsProps> = ({
     setAgentLoading(true);
     try {
       await stopAgent(agentId, agentSettings?.api_base_url);
-      showToast("AI agent stopped", "success");
+      showToast(teacherCopy?.stopped ?? "AI agent stopped", "success");
     } catch (error) {
       console.error("Unable to stop the AI agent", error);
-      showToast("Failed to stop AI agent", "error");
+      showToast(teacherCopy?.stopFailed ?? "Failed to stop AI agent", "error");
     } finally {
       clearAgent();
     }
-  }, [agentId, agentSettings?.api_base_url, clearAgent, setAgentLoading]);
+  }, [agentId, agentSettings?.api_base_url, clearAgent, setAgentLoading, teacherCopy]);
 
   const handleToggleAgent = useCallback(async (): Promise<void> => {
     if (isAgentActive) await handleStopAgent();
@@ -350,11 +356,11 @@ const Controls: React.FC<ControlsProps> = ({
       const persistedSettings = withTranscriptTransport(settings);
       const runtimeSettings =
         experienceMode === "teacher"
-          ? withAiTeacherRuntimeDefaults(persistedSettings)
+          ? withAiTeacherRuntimeDefaults(persistedSettings, locale)
           : persistedSettings;
       const previousRuntimeSettings =
         previousSettings && experienceMode === "teacher"
-          ? withAiTeacherRuntimeDefaults(previousSettings)
+          ? withAiTeacherRuntimeDefaults(previousSettings, locale)
           : previousSettings;
       setAgentSettings(persistedSettings);
 
@@ -365,7 +371,7 @@ const Controls: React.FC<ControlsProps> = ({
       }
 
       if (!isAgentActive || !agentId || !channelId) {
-        showToast("Agent settings saved", "success");
+        showToast(teacherCopy?.saved ?? "Agent settings saved", "success");
         return;
       }
 
@@ -381,7 +387,7 @@ const Controls: React.FC<ControlsProps> = ({
         setAgentUpdating(true);
         try {
           await updateAgent(agentId, channelId, runtimeSettings);
-          showToast("Agent configuration updated", "success");
+          showToast(teacherCopy?.updated ?? "Agent configuration updated", "success");
         } catch (error) {
           showToast(
             error instanceof Error
@@ -395,7 +401,7 @@ const Controls: React.FC<ControlsProps> = ({
       }
       if (needsRestart) {
         showToast(
-          "Restart the agent for voice and advanced changes to take effect",
+          teacherCopy?.restart ?? "Restart the agent for voice and advanced changes to take effect",
           "info",
         );
       }
@@ -404,6 +410,8 @@ const Controls: React.FC<ControlsProps> = ({
       agentId,
       channelId,
       experienceMode,
+      locale,
+      teacherCopy,
       isAgentActive,
       setAgentSettings,
       setAgentUpdating,
@@ -412,7 +420,7 @@ const Controls: React.FC<ControlsProps> = ({
 
   const circleButton =
     "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-xl text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-cyan-300 sm:h-12 sm:w-12";
-  const agentLabel = isAgentActive ? "Stop agent" : "Start agent";
+  const agentLabel = isAgentActive ? (teacherCopy?.stop ?? "Stop agent") : (teacherCopy?.start ?? "Start agent");
 
   return (
     <>
@@ -422,8 +430,8 @@ const Controls: React.FC<ControlsProps> = ({
             type="button"
             onClick={() => void handleAudioToggle()}
             className={circleButton}
-            aria-label={audioMuted ? "Unmute microphone" : "Mute microphone"}
-            title={audioMuted ? "Unmute microphone" : "Mute microphone"}
+            aria-label={audioMuted ? (teacherCopy?.unmute ?? "Unmute microphone") : (teacherCopy?.mute ?? "Mute microphone")}
+            title={audioMuted ? (teacherCopy?.unmute ?? "Unmute microphone") : (teacherCopy?.mute ?? "Mute microphone")}
           >
             {audioMuted ? <MdMicOff /> : <MdMic />}
           </button>
@@ -469,8 +477,8 @@ const Controls: React.FC<ControlsProps> = ({
             onClick={() => void handleEndCall()}
             disabled={isEnding}
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-500 text-2xl text-white shadow-lg shadow-red-950/40 transition hover:bg-red-400 disabled:cursor-wait disabled:opacity-60 sm:h-14 sm:w-14"
-            aria-label="End call"
-            title="End call"
+            aria-label={teacherCopy?.end ?? "End call"}
+            title={teacherCopy?.end ?? "End call"}
           >
             <MdCallEnd />
           </button>
@@ -495,9 +503,9 @@ const Controls: React.FC<ControlsProps> = ({
             )}
             <span className="hidden text-sm font-semibold sm:inline">
               {isAgentLoading
-                ? "Connecting"
+                ? (teacherCopy?.starting ?? "Connecting")
                 : isAgentUpdating
-                  ? "Updating"
+                  ? (teacherCopy?.updating ?? "Updating")
                   : agentLabel}
             </span>
           </button>
@@ -513,13 +521,13 @@ const Controls: React.FC<ControlsProps> = ({
               } disabled:cursor-wait disabled:opacity-60`}
               aria-label={
                 experienceMode === "teacher"
-                  ? "Exit Teacher Mode"
+                  ? (teacherCopy?.teacherMode ?? "Exit Teacher Mode")
                   : "Enter Teacher Mode"
               }
               aria-pressed={experienceMode === "teacher"}
               title={
                 experienceMode === "teacher"
-                  ? "Exit Teacher Mode"
+                  ? (teacherCopy?.teacherMode ?? "Exit Teacher Mode")
                   : "Enter Teacher Mode"
               }
             >
@@ -534,8 +542,8 @@ const Controls: React.FC<ControlsProps> = ({
             type="button"
             onClick={() => setIsSettingsOpen(true)}
             className={circleButton}
-            aria-label="Agent settings"
-            title="Agent settings"
+            aria-label={teacherCopy?.settings ?? "Agent settings"}
+            title={teacherCopy?.settings ?? "Agent settings"}
           >
             <MdSettings />
           </button>

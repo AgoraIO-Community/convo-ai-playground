@@ -1,6 +1,8 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { TeacherLocaleProvider } from "@/locales/TeacherLocaleProvider";
+import type { AgentSettings } from "@/types/agora";
 
 const mocks = vi.hoisted(() => ({
   onEndCall: vi.fn(),
@@ -33,7 +35,7 @@ const state = {
   isAgentActive: false,
   isAgentLoading: false,
   isAgentUpdating: false,
-  agentSettings: { advanced_features: { enable_rtm: true } },
+  agentSettings: { advanced_features: { enable_rtm: true } } as AgentSettings,
   setAgentLoading: mocks.setAgentLoading,
   setAgentActive: mocks.setAgentActive,
   setAgentUpdating: mocks.setAgentUpdating,
@@ -93,7 +95,24 @@ describe("Controls", () => {
     mocks.settingsSidebarProps.length = 0;
     state.agentId = null;
     state.isAgentActive = false;
-    state.agentSettings = { advanced_features: { enable_rtm: true } };
+    state.agentSettings = { advanced_features: { enable_rtm: true } } as AgentSettings;
+  });
+
+  it.each(["pt-BR", "en-US"] as const)("starts a teacher with selected %s runtime settings", async (locale) => {
+    state.agentSettings = {
+      name: "Samira", llm: { vendor: "openai", api_key: "llm-test", params: {} },
+      tts: { vendor: "elevenlabs", params: { key: "voice-test", voice_id: "Jessica" } },
+      asr: { vendor: "deepgram", params: { key: "asr-test" } },
+    } as AgentSettings;
+    const saved = structuredClone(state.agentSettings);
+    render(React.createElement(TeacherLocaleProvider, { initialLocale: locale, children:
+      React.createElement(Controls, { onEndCall: mocks.onEndCall, experienceMode: "teacher",
+        teacherSession: { sessionId: "session", token: "token", expiresAt: Date.now() + 60000, liveMcpConfigured: true } })
+    }));
+    fireEvent.click(screen.getByRole("button", { name: locale === "pt-BR" ? "Iniciar professora" : "Start agent" }));
+    await waitFor(() => expect(mocks.inviteAgent).toHaveBeenCalledOnce());
+    expect(mocks.inviteAgent.mock.calls[0][2].asr).toMatchObject({ vendor: "deepgram", language: locale, params: { model: "nova-3", language: locale, key: "asr-test" } });
+    expect(state.agentSettings).toEqual(saved);
   });
 
   it("renders the camera control only in video mode", () => {
@@ -172,7 +191,7 @@ describe("Controls", () => {
   });
 
   it("uses RTC data-stream delivery when RTM is disabled", async () => {
-    state.agentSettings = { advanced_features: { enable_rtm: false } };
+    state.agentSettings = { advanced_features: { enable_rtm: false } } as AgentSettings;
     render(
       React.createElement(Controls, {
         onEndCall: mocks.onEndCall,
