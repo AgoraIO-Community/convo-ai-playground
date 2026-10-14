@@ -8,16 +8,16 @@
 
 ## Goal
 
-Support one AI Teacher experience in European Portuguese and US English without duplicating deployments or application flows. Portuguese (`pt-PT`) is the default for a new visitor. An authenticated learner may choose either language before starting a lesson, and may switch languages after stopping the live agent. The selected locale controls the complete classroom experience: interface copy, speech recognition, teacher prompt and greeting, lesson speech, blackboard text, intent recognition, status messages, and errors.
+Support one AI Teacher experience in Brazilian Portuguese and US English without duplicating deployments or application flows. Brazilian Portuguese (`pt-BR`) is the default for a new visitor. An authenticated learner may choose either language before starting a lesson, and may switch languages after stopping the live agent. The selected locale controls the complete classroom experience: interface copy, speech recognition, teacher prompt and greeting, lesson speech, blackboard text, intent recognition, status messages, and errors.
 
 ## Product Contract
 
 ### Default and authentication flow
 
-- With no saved preference, `/` renders in European Portuguese.
+- With no saved preference, `/` renders in Brazilian Portuguese.
 - The unauthenticated landing page and Google sign-in call to action are Portuguese.
 - Google authentication returns to `/`, not directly to `/classroom`.
-- After authentication, the landing page displays a language picker with visible text and decorative symbols: `🇵🇹 Português` and `🇺🇸 English`.
+- After authentication, the landing page displays a language picker with visible text and decorative symbols: `🇧🇷 Português (Brasil)` and `🇺🇸 English`.
 - The selected locale survives page refreshes, navigation, and the Google OAuth round trip.
 - If the learner has previously selected English, that saved preference wins over the Portuguese default.
 - Entering the classroom starts the existing automatic teacher connection using the selected locale.
@@ -43,14 +43,14 @@ The locale layer is divided into focused units:
 src/locales/
 ├── types.ts             # Locale codes and profile interfaces
 ├── index.ts             # Registry, default, parser, and lookup helpers
-├── pt-PT.ts             # European Portuguese profile
+├── pt-BR.ts             # Brazilian Portuguese profile
 └── en-US.ts             # US English profile
 ```
 
 Each profile satisfies a shared interface resembling:
 
 ```ts
-type TeacherLocale = "pt-PT" | "en-US";
+type TeacherLocale = "pt-BR" | "en-US";
 
 interface TeacherLocaleProfile {
   locale: TeacherLocale;
@@ -82,7 +82,7 @@ This structure allows another language to be added as one new validated profile.
 
 ## Locale Persistence and Rendering
 
-The selected locale is stored in a non-sensitive cookie named `ai_teacher_locale`. Valid values are exactly `pt-PT` and `en-US`; missing or invalid values resolve to `pt-PT`.
+The selected locale is stored in a non-sensitive cookie named `ai_teacher_locale`. Valid values are exactly `pt-BR` and `en-US`; missing or invalid values resolve to `pt-BR`.
 
 A locale provider receives the server-resolved initial locale and exposes:
 
@@ -104,12 +104,12 @@ The existing teacher runtime-default builder becomes locale-aware. Immediately b
 
 - the locale-specific teacher system prompt;
 - localized greeting and temporary-failure message;
-- Deepgram Nova-3 with `pt-PT` or `en-US`;
+- Deepgram Nova-3 with `pt-BR` or `en-US`;
 - the existing LLM model, reasoning effort, avatar, ElevenLabs voice, turn detection, interruption behavior, MCP configuration, RTM configuration, and other saved settings.
 
-The locale layer must not overwrite unrelated saved settings. Samira remains the teacher identity, the selected Anam avatar remains unchanged, and the configured ElevenLabs voice and Flash 2.5 behavior remain unchanged. Portuguese is produced by sending European Portuguese text to the multilingual TTS pipeline.
+The locale layer must not overwrite unrelated saved settings. Samira remains the teacher identity, the selected Anam avatar remains unchanged, and the configured ElevenLabs voice and Flash 2.5 behavior remain unchanged. Portuguese is produced by sending Brazilian Portuguese text to the multilingual TTS pipeline.
 
-The Portuguese system prompt uses European Portuguese vocabulary and explicitly requires European Portuguese responses. It retains the existing one-sentence acknowledgement contract and localized exact responses for new topics, follow-ups, continuation, pausing, clearing the board, and temporary failures.
+The Portuguese system prompt uses natural Brazilian Portuguese vocabulary and explicitly requires Brazilian Portuguese responses. It retains the existing one-sentence acknowledgement contract and localized exact responses for new topics, follow-ups, continuation, pausing, clearing the board, and temporary failures.
 
 ## Lesson Director and Blackboard
 
@@ -131,7 +131,7 @@ interface ValidatedTeacherLessonRequest
 }
 ```
 
-The updated client sends the active locale for every lesson and clarification request. The server resolves a missing locale from an older client to `pt-PT`, rejects any present but unsupported locale, and invokes the planner only with a validated `TeacherLocale`.
+The updated client sends the active locale for every lesson and clarification request. The server resolves a missing locale from an older client to `pt-BR`, rejects any present but unsupported locale, and invokes the planner only with a validated `TeacherLocale`.
 
 The Lesson Director keeps its existing JSON operation contract and visual-quality rules. It adds a locale-specific instruction requiring all learner-facing fields to use the selected language:
 
@@ -147,12 +147,12 @@ Technical identifiers, code, equations, product names, and established English t
 
 ## Localized Turn Interpretation
 
-Language selection also controls deterministic client intents. The Portuguese profile recognizes natural European Portuguese variants for:
+Language selection also controls deterministic client intents. The Portuguese profile recognizes natural Brazilian Portuguese variants for:
 
-- continuing or resuming, such as `continua`, `continue`, and `pode continuar`;
-- stopping or pausing, such as `pára`, `pare`, `espera`, and `aguarde`;
-- clearing the board, such as `limpa o quadro`, `apaga o quadro`, and `recomeça`;
-- replacing the topic, such as `muda de tema`, `novo tema`, and `em vez disso`;
+- continuing or resuming, such as `continue`, `pode continuar`, and `segue em frente`;
+- stopping or pausing, such as `pare`, `pausa`, `espere`, and `aguarde`;
+- clearing the board, such as `limpe o quadro`, `apague o quadro`, and `comece de novo`;
+- replacing the topic, such as `mude de assunto`, `novo assunto`, and `em vez disso`;
 - incomplete-question detection for common Portuguese question stems.
 
 English behavior retains the current intent phrases. Text normalization remains Unicode-aware and accent-tolerant where doing so does not create false positives. Intent recognition is driven by the active profile rather than one combined multilingual regular expression.
@@ -171,7 +171,7 @@ All teacher-mode user-facing strings come from the active profile, including:
 
 The language picker is accessible by keyboard and screen reader. Flags are decorative; visible language names and selected state carry meaning. Disabled classroom state explains that the agent must be stopped before changing language.
 
-The Portuguese copy uses European Portuguese forms, including `Iniciar sessão`, `A preparar a sua sala de aula`, `Entrar na sala de aula`, and `Aula concluída`. It avoids Brazilian Portuguese forms unless they are also natural in Portugal.
+The Portuguese copy uses natural Brazilian Portuguese forms, including `Entrar com o Google`, `Preparando sua sala de aula`, `Entrar na sala de aula`, and `Aula concluída`. It avoids literal translation and European Portuguese constructions that would sound unnatural to a Brazilian learner.
 
 ## State and Data Flow
 
@@ -199,7 +199,7 @@ Locale changes are atomic from the learner's perspective: update preference, cle
 
 ## Error Handling
 
-- Missing or invalid locale cookie: resolve to `pt-PT`.
+- Missing or invalid locale cookie: resolve to `pt-BR`.
 - Missing translation key during development: fail visibly so incomplete profiles are caught.
 - Unexpected missing copy in production: fall back to the corresponding Portuguese message and report a safe diagnostic.
 - Locale change requested while the agent is active: leave state unchanged and present localized guidance to stop the agent first.
@@ -227,7 +227,7 @@ Automated coverage verifies:
 
 - locale parsing, defaulting, and profile completeness;
 - cookie persistence and invalid-cookie fallback;
-- runtime agent payloads for `pt-PT` and `en-US` without loss of unrelated saved settings;
+- runtime agent payloads for `pt-BR` and `en-US` without loss of unrelated saved settings;
 - Portuguese and English deterministic intents;
 - lesson API locale validation and propagation;
 - Portuguese lesson parsing with accented speech and board labels;
@@ -249,10 +249,10 @@ Manual smoke verification covers:
 
 ## Acceptance Criteria
 
-1. With no saved locale, all Teacher Mode surfaces render in European Portuguese.
+1. With no saved locale, all Teacher Mode surfaces render in Brazilian Portuguese.
 2. Google authentication returns to the landing page, where an authenticated learner can select Portuguese or English before entering the classroom.
 3. The learner's valid locale selection persists through refreshes, navigation, and OAuth.
-4. Starting a Portuguese session configures Deepgram Nova-3 for `pt-PT`, uses Portuguese agent prompts and messages, and produces Portuguese speech, transcript content, Lesson Director speech, and visible blackboard text.
+4. Starting a Portuguese session configures Deepgram Nova-3 for `pt-BR`, uses Brazilian Portuguese agent prompts and messages, and produces Brazilian Portuguese speech, transcript content, Lesson Director speech, and visible blackboard text.
 5. Starting an English session preserves the current English teacher behavior with English ASR, prompts, speech, intents, and board content.
 6. The language picker is disabled throughout every active-agent lifecycle state and is re-enabled only after the agent is stopped.
 7. Changing locale while stopped clears all previous lesson and transcript state before another session can start.
