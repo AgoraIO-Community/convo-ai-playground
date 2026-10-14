@@ -41,7 +41,7 @@ describe("TeacherStage", () => {
     );
 
     expect(
-      screen.getByLabelText("AI teacher picture in picture"),
+      screen.getByLabelText("Vídeo da professora sobre o quadro"),
     ).toHaveClass("aspect-[3/2]");
   });
 
@@ -62,5 +62,11 @@ describe("TeacherStage", () => {
     const actions = screen.getByTestId("teacher-board-actions");
 
     expect(surface).not.toContainElement(actions);
+  });
+
+  it("shows Portuguese planning status and accessible board controls by default", () => {
+    render(<TeacherStage active teacher={createTeacher()} agentName="Samira" agentState={EAgentState.THINKING} transcriptionMode="rtm" lessonStatus="planning" />);
+    expect(screen.getByText("Preparando aula")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Limpar quadro" })).toBeInTheDocument();
   });
 });

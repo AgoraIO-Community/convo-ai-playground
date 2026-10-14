@@ -1,5 +1,7 @@
 "use client";
 
+import type { TeacherMessages } from "@/locales";
+import { englishMessages } from "@/locales/en-US";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   MdClose,
@@ -21,6 +23,7 @@ import { TranscriptRenderModeControls } from "./TranscriptRenderModeControls";
 
 interface TranscriptSidePanelProps {
   isOpen: boolean;
+  labels?: TeacherMessages["transcript"];
   onClose: () => void;
   onSendMessage?: (text: string, image?: File) => void;
   /** When true, render inline in a sidebar (no overlay, no close button). */
@@ -35,7 +38,9 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
   onSendMessage,
   embedded = false,
   showCloseButton = false,
+  labels,
 }) => {
+  const m = labels ?? { ...englishMessages.transcript, agent: "AI Agent" };
   const transcriptItems = useAppStore((state) => state.transcriptItems);
   const userSentMessages = useAppStore((state) => state.userSentMessages);
   const currentInProgressMessage = useAppStore(
@@ -309,7 +314,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
           <div className="flex items-center gap-3 min-w-0">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-                Live Transcript
+                {m.title}
               </h2>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span
@@ -319,12 +324,12 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                       : "bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400"
                   }`}
                 >
-                  Transmission: {transcriptionMode.toUpperCase()}
+                  {m.transmission}: {transcriptionMode.toUpperCase()}
                 </span>
                 {transcriptionMode === "rtc" && (
                   <span
                     className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 shrink-0"
-                    title="Chat is only available in RTM mode"
+                    title={m.chatUnavailable}
                   >
                     Transcript only
                   </span>
@@ -336,7 +341,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close transcript and chat"
+              aria-label={m.close}
               className="shrink-0 rounded-lg p-2 transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:hover:bg-gray-800"
             >
               <MdClose
@@ -351,11 +356,12 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
         {/* Render Mode Toggle */}
         <div className={`${embedded ? "px-4" : "px-6"} py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-center justify-between`}>
           <span className="text-xs text-gray-600 dark:text-gray-400">
-            Render Mode:
+            {m.renderMode}:
           </span>
           <TranscriptRenderModeControls
             value={transcriptRenderMode}
             onChange={setTranscriptRenderMode}
+            labels={labels}
           />
         </div>
 
@@ -367,7 +373,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
         >
           {displayItems.length === 0 && !currentInProgressMessage ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500">
-              <p className="text-sm">No transcript available yet.</p>
+              <p className="text-sm">{m.empty}</p>
               <p className="text-xs mt-2">
                 {isRTMMode
                   ? "Waiting for conversation to start..."
@@ -396,7 +402,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                         <div className="flex items-center gap-2 mb-1">
                           <MdAutoAwesome size={14} className="opacity-90" />
                           <span className="text-xs font-medium opacity-90">
-                            Instruction
+                            {m.instruction}
                           </span>
                           <span className="text-xs opacity-60">
                             {formatTime(entry._time)}
@@ -433,7 +439,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                       <div className="max-w-[80%] rounded-lg overflow-hidden bg-blue-500 dark:bg-blue-600 text-white px-4 py-2">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-medium opacity-80">
-                            You
+                            {m.you}
                           </span>
                           <span className="text-xs opacity-60">
                             {formatTime(entry._time)}
@@ -476,9 +482,9 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium opacity-80">
                           {isUser
-                            ? "You"
+                            ? m.you
                             : isAgent
-                            ? "AI Agent"
+                            ? m.agent
                             : `User ${item.uid}`}
                         </span>
                         <span className="text-xs opacity-60">
@@ -517,10 +523,10 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs font-medium opacity-80">
                         {currentInProgressMessage.uid === String(localUID)
-                          ? "You"
+                          ? m.you
                           : currentInProgressMessage.uid === agentRtcUid ||
                             currentInProgressMessage.uid === "0"
-                          ? "AI Agent"
+                          ? m.agent
                           : `User ${currentInProgressMessage.uid}`}
                       </span>
                       <span className="text-xs opacity-60">
@@ -558,7 +564,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                         : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
                   >
-                    Chat
+                    {m.chat}
                   </button>
                   <button
                     onClick={() => setInputMode("instruct")}
@@ -570,7 +576,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                     title="Send a custom instruction to the agent (v2.6 /think)"
                   >
                     <MdAutoAwesome size={14} />
-                    Instruct
+                    {m.instruct}
                   </button>
                 </div>
                 {inputMode === "instruct" && (
@@ -583,7 +589,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                     }`}
                   >
                     <MdTune size={14} />
-                    {showInstructAdvanced ? "Hide options" : "Options"}
+                    {showInstructAdvanced ? m.hideOptions : m.options}
                   </button>
                 )}
               </div>
@@ -594,7 +600,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
               <div className="flex items-center justify-between mb-3">
                 <div className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300">
                   <MdAutoAwesome size={14} />
-                  Instruct (v2.6)
+                  {m.instruct} (v2.6)
                 </div>
                 <button
                   onClick={() => setShowInstructAdvanced((v) => !v)}
@@ -605,7 +611,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                   }`}
                 >
                   <MdTune size={14} />
-                  {showInstructAdvanced ? "Hide options" : "Options"}
+                  {showInstructAdvanced ? m.hideOptions : m.options}
                 </button>
               </div>
             )}
@@ -721,7 +727,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                         handleSendMessage();
                       }
                     }}
-                    placeholder="Type a message..."
+                    placeholder={m.message}
                     className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                   />
                   <label className="flex items-center justify-center w-10 h-10 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg cursor-pointer transition-colors">
@@ -741,7 +747,7 @@ const TranscriptSidePanel: React.FC<TranscriptSidePanelProps> = ({
                     disabled={!messageText.trim() && !imageFile}
                     className="px-4 py-2 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    <MdSend size={18} />
+                    <MdSend size={18} aria-label={m.send} />
                   </button>
                 </div>
               ) : (

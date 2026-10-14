@@ -74,6 +74,7 @@ export function useTeacherBoardSession(
   >("instant");
   const mountedRef = useRef(true);
   const sessionRef = useRef<TeacherSessionCredentials | null>(null);
+  const sessionLocaleRef = useRef<TeacherLocale | null>(null);
   const lastEventIdRef = useRef(0);
   const demoTokenRef = useRef(0);
   const demoIndexRef = useRef(0);
@@ -147,6 +148,9 @@ export function useTeacherBoardSession(
 
   useEffect(() => {
     mountedRef.current = true;
+    setSession(null);
+    lastEventIdRef.current = 0;
+    setConnection(connectRemote ? "connecting" : "demo");
 
     if (!connectRemote) {
       return () => {
@@ -179,6 +183,7 @@ export function useTeacherBoardSession(
           return;
         }
         sessionRef.current = credentials;
+        sessionLocaleRef.current = locale;
         setSession(credentials);
       } catch (error) {
         console.warn("Unable to create teacher board session", error);
@@ -202,10 +207,10 @@ export function useTeacherBoardSession(
       ).catch(() => undefined);
       sessionRef.current = null;
     };
-  }, [connectRemote, pauseDemo]);
+  }, [connectRemote, pauseDemo, locale]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || sessionLocaleRef.current !== locale) return;
     const controller = new AbortController();
     let disposed = false;
 
@@ -244,6 +249,7 @@ export function useTeacherBoardSession(
           const payload = (await response.json()) as {
             events?: TeacherCommandEvent[];
           };
+          if (disposed || controller.signal.aborted) return;
           reconnectDelay = RECONNECT_MIN_MS;
           if (!demoRunningRef.current) {
             setConnection("live");
@@ -269,7 +275,7 @@ export function useTeacherBoardSession(
       disposed = true;
       controller.abort();
     };
-  }, [pauseDemo, session]);
+  }, [pauseDemo, session, locale]);
 
   return {
     session,

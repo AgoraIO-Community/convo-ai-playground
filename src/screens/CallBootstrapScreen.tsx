@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
+import { useTeacherLocale } from "@/locales/TeacherLocaleProvider";
 import { createRtcSession } from "@/api/agoraApi";
 import MeetingLoadingSkeleton from "@/components/MeetingLoadingSkeleton";
 import TeacherClassroomLoadingScreen from "@/components/teacher/TeacherClassroomLoadingScreen";
@@ -23,6 +24,7 @@ interface CallBootstrapScreenProps {
 const CallBootstrapScreen: React.FC<CallBootstrapScreenProps> = ({
   startImmediately = false,
 }) => {
+  const { profile } = useTeacherLocale();
   const teacherModeEnabled = isAiTeacherModeEnabled();
   const callActive = useAppStore((state) => state.callActive);
   const callStart = useAppStore((state) => state.callStart);
@@ -66,14 +68,14 @@ const CallBootstrapScreen: React.FC<CallBootstrapScreenProps> = ({
         setStatus("active");
       } catch (error) {
         setErrorMessage(
-          error instanceof Error ? error.message : "Unable to start the call",
+          teacherModeEnabled ? profile.messages.classroom.failed : error instanceof Error ? error.message : "Unable to start the call",
         );
         setStatus("error");
       }
     };
 
     void bootstrap();
-  }, [agentSettings, attempt, callActive, callStart, joinMeeting, status]);
+  }, [agentSettings, attempt, callActive, callStart, joinMeeting, status, teacherModeEnabled, profile]);
 
   const handleEnter = useCallback((): void => {
     if (status === "joining") return;

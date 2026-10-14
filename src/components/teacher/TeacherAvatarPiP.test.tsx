@@ -16,7 +16,7 @@ describe("TeacherAvatarPiP", () => {
     );
 
     expect(
-      screen.getByRole("img", { name: "Samira AI teacher" }),
+      screen.getByRole("img", { name: "Samira Professora de IA" }),
     ).toHaveClass("object-cover");
   });
 });

@@ -1,8 +1,24 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { AgentSettings } from "@/types/agora";
+import { ETurnStatus, type AgentSettings } from "@/types/agora";
 import useAppStore from "./useAppStore";
 
 describe("call state", () => {
+  it("clears teacher conversation without changing settings or call identity", () => {
+    const item = { uid: "42", stream_id: 1, turn_id: 1, _time: 1, text: "old lesson", status: ETurnStatus.END, metadata: null };
+    useAppStore.setState({ channelId: "classroom", localUID: "42", selectedMicrophoneId: "mic",
+      transcriptItems: [item], currentInProgressMessage: item, userSentMessages: [{ text: "old", _time: 1 }],
+      instructionLog: [{ id: "old", text: "old", status: "sent", _time: 1, options: {} }] });
+    const settings = useAppStore.getState().agentSettings;
+    useAppStore.getState().clearTeacherConversation();
+    const state = useAppStore.getState();
+    expect(state.transcriptItems).toEqual([]);
+    expect(state.currentInProgressMessage).toBeNull();
+    expect(state.userSentMessages).toEqual([]);
+    expect(state.instructionLog).toEqual([]);
+    expect(state.channelId).toBe("classroom");
+    expect(state.agentSettings).toBe(settings);
+    expect(state.selectedMicrophoneId).toBe("mic");
+  });
   beforeEach(() => {
     useAppStore.getState().callEnd();
   });

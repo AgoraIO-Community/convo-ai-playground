@@ -1,5 +1,7 @@
 "use client";
 
+import { useTeacherLocale } from "@/locales/TeacherLocaleProvider";
+import type { TeacherMessages } from "@/locales";
 import { useEffect, useRef } from "react";
 import Image from "next/image";
 import type { IRemoteVideoTrack } from "agora-rtc-sdk-ng";
@@ -17,18 +19,18 @@ interface TeacherAvatarPiPProps {
   previewImageSrc?: string;
 }
 
-function stateLabel(agentState: EAgentState): string {
+function stateLabel(agentState: EAgentState, m: TeacherMessages["avatar"]): string {
   switch (agentState) {
     case EAgentState.LISTENING:
-      return "Listening";
+      return m.listening;
     case EAgentState.THINKING:
-      return "Thinking";
+      return m.thinking;
     case EAgentState.SPEAKING:
-      return "Explaining";
+      return m.explaining;
     case EAgentState.SILENT:
-      return "Paused";
+      return m.paused;
     default:
-      return "Ready";
+      return m.ready;
   }
 }
 
@@ -42,6 +44,8 @@ const TeacherAvatarPiP: React.FC<TeacherAvatarPiPProps> = ({
   avatarExpected = false,
   previewImageSrc,
 }) => {
+  const { profile } = useTeacherLocale();
+  const m = profile.messages.avatar;
   const videoContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -70,8 +74,8 @@ const TeacherAvatarPiP: React.FC<TeacherAvatarPiPProps> = ({
     return (
       <div className="flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_50%_35%,rgba(34,211,238,0.17),transparent_48%),#07111f] px-4 text-center text-white">
         <span className="mb-3 h-9 w-9 animate-pulse rounded-full border border-cyan-200/25 bg-cyan-300/10 shadow-[0_0_28px_rgba(34,211,238,0.2)]" />
-        <p className="text-sm font-semibold">Teacher connecting</p>
-        <p className="mt-1 text-[11px] text-slate-400">Voice remains active</p>
+        <p className="text-sm font-semibold">{m.connecting}</p>
+        <p className="mt-1 text-[11px] text-slate-400">{m.voiceActive}</p>
       </div>
     );
   }
@@ -81,7 +85,7 @@ const TeacherAvatarPiP: React.FC<TeacherAvatarPiPProps> = ({
       <div className="relative h-full w-full overflow-hidden bg-slate-950 text-white">
         <Image
           src={previewImageSrc}
-          alt={`${agentName} AI teacher`}
+          alt={`${agentName} ${m.teacher}`}
           fill
           sizes="(max-width: 640px) 100px, 148px"
           className="object-cover object-center"
@@ -91,7 +95,7 @@ const TeacherAvatarPiP: React.FC<TeacherAvatarPiPProps> = ({
         <div className="absolute bottom-2 right-2">
           <div className="inline-flex items-center gap-1 rounded-full border border-emerald-200/20 bg-slate-950/65 px-2 py-1 text-[10px] font-medium text-emerald-100 backdrop-blur-md">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 motion-safe:animate-pulse" />
-            {stateLabel(agentState)}
+            {stateLabel(agentState, m)}
           </div>
         </div>
       </div>
@@ -107,11 +111,11 @@ const TeacherAvatarPiP: React.FC<TeacherAvatarPiPProps> = ({
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold">{agentName}</p>
           <p className="mt-0.5 text-[10px] font-medium text-cyan-200/80">
-            {transcriptionMode === "rtm" ? stateLabel(agentState) : "Connected"}
+            {transcriptionMode === "rtm" ? stateLabel(agentState, m) : m.connected}
           </p>
           {agentId && (
             <p className="mt-1 truncate text-[9px] text-slate-500">
-              Voice teacher
+              {m.voiceTeacher}
             </p>
           )}
         </div>
@@ -120,20 +124,20 @@ const TeacherAvatarPiP: React.FC<TeacherAvatarPiPProps> = ({
   }
 
   const label =
-    transcriptionMode === "rtm" ? stateLabel(agentState) : "Connected";
+    transcriptionMode === "rtm" ? stateLabel(agentState, m) : "Connected";
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-950 text-white">
       <div
         ref={videoContainerRef}
         className="absolute inset-0 bg-[radial-gradient(circle_at_50%_25%,rgba(34,211,238,0.09),transparent_52%),#020617] [&_video]:!h-full [&_video]:!w-full [&_video]:!object-contain [&_video]:!object-top"
-        aria-label={`${agentName} avatar video`}
+        aria-label={`${agentName} ${m.video}`}
       />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/10" />
       <div className="absolute bottom-2 left-2 right-2 flex items-end justify-between gap-2">
         <div className="min-w-0 rounded-md bg-slate-950/70 px-2 py-1 backdrop-blur-md">
           <p className="truncate text-xs font-semibold">{agentName}</p>
-          <p className="text-[10px] text-slate-300">AI teacher</p>
+          <p className="text-[10px] text-slate-300">{m.teacher}</p>
         </div>
         <div
           className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200/20 bg-emerald-400/15 px-2 py-1 text-[10px] font-medium text-emerald-100 backdrop-blur-md"

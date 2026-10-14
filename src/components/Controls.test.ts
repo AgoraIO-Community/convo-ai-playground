@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   toggleLocalVideo: vi.fn(),
   configureRtm: vi.fn(),
   inviteAgent: vi.fn(),
+  stopAgent: vi.fn(),
   setAgentLoading: vi.fn(),
   setAgentActive: vi.fn(),
   setAgentSettings: vi.fn(),
@@ -62,7 +63,7 @@ vi.mock("@/hooks/useAgora", () => ({
 
 vi.mock("@/api/agentApi", () => ({
   inviteAgent: mocks.inviteAgent,
-  stopAgent: vi.fn(),
+  stopAgent: mocks.stopAgent,
   updateAgent: vi.fn(),
 }));
 
@@ -113,6 +114,17 @@ describe("Controls", () => {
     await waitFor(() => expect(mocks.inviteAgent).toHaveBeenCalledOnce());
     expect(mocks.inviteAgent.mock.calls[0][2].asr).toMatchObject({ vendor: "deepgram", language: locale, params: { model: "nova-3", language: locale, key: "asr-test" } });
     expect(state.agentSettings).toEqual(saved);
+  });
+
+  it("keeps the agent active if stopping fails so language stays locked", async () => {
+    state.agentId = "running";
+    state.isAgentActive = true;
+    mocks.stopAgent.mockRejectedValueOnce(new Error("network unavailable"));
+    render(React.createElement(Controls, { onEndCall: mocks.onEndCall, experienceMode: "teacher" }));
+    fireEvent.click(screen.getByRole("button", { name: "Parar professora" }));
+    await waitFor(() => expect(mocks.stopAgent).toHaveBeenCalledOnce());
+    expect(mocks.clearAgent).not.toHaveBeenCalled();
+    expect(mocks.setAgentLoading).toHaveBeenLastCalledWith(false);
   });
 
   it("renders the camera control only in video mode", () => {

@@ -30,6 +30,8 @@ function createSettings(): AgentSettings {
         avatar_id: "lemonslice",
         agent_image_url: "https://example.com/teacher.jpg",
         aspect_ratio: "1x1",
+        agora_uid: "100",
+        api_base_url: "https://api.lemonslice.com",
       },
     },
   };

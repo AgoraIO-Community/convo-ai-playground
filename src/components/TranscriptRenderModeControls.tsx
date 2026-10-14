@@ -1,11 +1,13 @@
 "use client";
 
+import type { TeacherMessages } from "@/locales";
 import { useId, type ReactNode } from "react";
 import { MdTextFields, MdViewHeadline } from "react-icons/md";
 import { ETranscriptRenderMode } from "@/types/agora";
 
 interface TranscriptRenderModeControlsProps {
   value: ETranscriptRenderMode;
+  labels?: TeacherMessages["transcript"];
   onChange: (mode: ETranscriptRenderMode) => void;
 }
 
@@ -36,12 +38,14 @@ const options: RenderModeOption[] = [
 export function TranscriptRenderModeControls({
   value,
   onChange,
+  labels,
 }: TranscriptRenderModeControlsProps) {
   const tooltipIdPrefix = useId();
 
   return (
     <div className="flex gap-1">
-      {options.map((option) => {
+      {options.map((baseOption) => {
+        const option = labels ? { ...baseOption, label: labels[baseOption.mode === ETranscriptRenderMode.TEXT ? "textMode" : baseOption.mode === ETranscriptRenderMode.WORD ? "wordMode" : "autoMode"], content: baseOption.mode === ETranscriptRenderMode.AUTO ? labels.auto : baseOption.content } : baseOption;
         const selected = value === option.mode;
         const tooltipId = `${tooltipIdPrefix}-${option.mode}-tooltip`;
 

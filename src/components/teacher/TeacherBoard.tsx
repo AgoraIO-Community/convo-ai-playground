@@ -1,4 +1,5 @@
 "use client";
+import { useTeacherLocale } from "@/locales/TeacherLocaleProvider";
 
 import "@excalidraw/excalidraw/index.css";
 
@@ -87,6 +88,7 @@ const TeacherBoard = forwardRef<TeacherBoardHandle, TeacherBoardProps>(
     },
     forwardedRef,
   ) {
+    const { locale } = useTeacherLocale();
     const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
     const studentElementsRef = useRef(
       new Map<string, OrderedExcalidrawElement>(),
@@ -277,6 +279,7 @@ const TeacherBoard = forwardRef<TeacherBoardHandle, TeacherBoardProps>(
       >
         <div className="pointer-events-none absolute inset-0 z-[2] rounded-[22px] ring-1 ring-inset ring-white/[0.035]" />
         <Excalidraw
+          langCode={locale === "en-US" ? "en" : "pt-BR"}
           excalidrawAPI={setApi}
           initialData={{
             appState: {

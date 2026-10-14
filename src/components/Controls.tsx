@@ -322,12 +322,13 @@ const Controls: React.FC<ControlsProps> = ({
     setAgentLoading(true);
     try {
       await stopAgent(agentId, agentSettings?.api_base_url);
+      clearAgent();
       showToast(teacherCopy?.stopped ?? "AI agent stopped", "success");
     } catch (error) {
-      console.error("Unable to stop the AI agent", error);
+      console.warn("Unable to stop the AI agent", { category: error instanceof Error ? error.name : "UnknownError" });
       showToast(teacherCopy?.stopFailed ?? "Failed to stop AI agent", "error");
     } finally {
-      clearAgent();
+      setAgentLoading(false);
     }
   }, [agentId, agentSettings?.api_base_url, clearAgent, setAgentLoading, teacherCopy]);
 

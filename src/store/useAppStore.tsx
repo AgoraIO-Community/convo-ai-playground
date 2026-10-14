@@ -123,6 +123,7 @@ interface AppState {
   setAgentLoading: (loading: boolean) => void;
   setAgentUpdating: (updating: boolean) => void;
   clearAgent: () => void;
+  clearTeacherConversation: () => void;
   setAgentSettings: (settings: AgentSettings) => void;
   setAgentState: (state: EAgentState) => void;
   setAgentAvatarVideoTrack: (track: IRemoteVideoTrack | null) => void;
@@ -264,6 +265,12 @@ const useAppStore = create<AppState>((set) => ({
   setAgentLoading: (isAgentLoading) => set({ isAgentLoading }),
   setAgentUpdating: (isAgentUpdating) => set({ isAgentUpdating }),
   clearAgent: () => set(INITIAL_AGENT_STATE),
+  clearTeacherConversation: () => set({
+    transcriptItems: [],
+    currentInProgressMessage: null,
+    userSentMessages: [],
+    instructionLog: [],
+  }),
   setAgentSettings: (agentSettings) => {
     const normalizedSettings = withTranscriptTransport(agentSettings);
     set((state) => ({

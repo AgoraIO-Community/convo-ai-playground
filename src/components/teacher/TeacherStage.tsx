@@ -1,5 +1,7 @@
 "use client";
 
+import { useTeacherLocale } from "@/locales/TeacherLocaleProvider";
+import type { TeacherMessages } from "@/locales";
 import dynamic from "next/dynamic";
 import { useCallback, useRef } from "react";
 import type { IRemoteVideoTrack } from "agora-rtc-sdk-ng";
@@ -89,68 +91,69 @@ function statusFor(
   lessonProgress: TeacherLessonProgress | null,
   variant: "interactive" | "preview",
   teacherStarting: boolean,
+  m: TeacherMessages["stage"],
 ): {
   label: string;
   dot: string;
 } {
   if (variant === "preview") {
-    return { label: "Live lesson preview", dot: "bg-cyan-300" };
+    return { label: m.preview, dot: "bg-cyan-300" };
   }
   if (teacherStarting) {
-    return { label: "Connecting teacher", dot: "bg-cyan-300 animate-pulse" };
+    return { label: m.connecting, dot: "bg-cyan-300 animate-pulse" };
   }
   if (lessonStatus === "planning") {
-    return { label: "Planning lesson", dot: "bg-violet-300 animate-pulse" };
+    return { label: m.planning, dot: "bg-violet-300 animate-pulse" };
   }
   if (lessonStatus === "writing") {
     return {
       label: lessonProgress
-        ? `Writing · ${lessonProgress.current} of ${lessonProgress.total}`
-        : "Writing on board",
+        ? `${m.writing} · ${lessonProgress.current} ${m.of} ${lessonProgress.total}`
+        : m.writing,
       dot: "bg-amber-300 animate-pulse",
     };
   }
   if (lessonStatus === "explaining") {
     return {
       label: lessonProgress
-        ? `Explaining · ${lessonProgress.current} of ${lessonProgress.total}`
-        : "Explaining",
+        ? `${m.explaining} · ${lessonProgress.current} ${m.of} ${lessonProgress.total}`
+        : m.explaining,
       dot: "bg-emerald-300 animate-pulse",
     };
   }
   if (lessonStatus === "clarifying") {
     return {
       label: lessonProgress
-        ? `Answering question · ${lessonProgress.current} of ${lessonProgress.total}`
-        : "Answering question",
+        ? `${m.clarifying} · ${lessonProgress.current} ${m.of} ${lessonProgress.total}`
+        : m.clarifying,
       dot: "bg-violet-300 animate-pulse",
     };
   }
   if (lessonStatus === "paused") {
-    return { label: "Paused · say continue", dot: "bg-amber-300" };
+    return { label: m.paused, dot: "bg-amber-300" };
   }
   if (lessonStatus === "interrupted") {
-    return { label: "Interrupted", dot: "bg-amber-300" };
+    return { label: m.interrupted, dot: "bg-amber-300" };
   }
   if (lessonStatus === "unavailable") {
-    return { label: "Teacher unavailable", dot: "bg-rose-300" };
+    return { label: m.unavailable, dot: "bg-rose-300" };
   }
   if (lessonStatus === "error") {
-    return { label: "Lesson error", dot: "bg-rose-300" };
+    return { label: m.error, dot: "bg-rose-300" };
   }
   if (teacher.connection === "demo") {
-    return { label: "Prototype lesson", dot: "bg-amber-300" };
+    return { label: m.prototype, dot: "bg-amber-300" };
   }
   if (teacher.connection === "connecting") {
-    return { label: "Preparing board", dot: "bg-cyan-300 animate-pulse" };
+    return { label: m.preparing, dot: "bg-cyan-300 animate-pulse" };
   }
   if (teacher.connection === "offline") {
-    return { label: "Board offline · voice continues", dot: "bg-rose-300" };
+    return { label: m.offline, dot: "bg-rose-300" };
   }
   if (teacher.session?.liveMcpConfigured) {
-    return { label: "Live board ready", dot: "bg-emerald-300" };
+    return { label: m.ready, dot: "bg-emerald-300" };
   }
-  return { label: "Local prototype ready", dot: "bg-cyan-300" };
+  return { label: m.local, dot: "bg-cyan-300" };
 }
 
 const TeacherStage: React.FC<TeacherStageProps> = ({
@@ -171,6 +174,8 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
   avatarAspectRatio,
   avatarPlacement = "overlay",
 }) => {
+  const { profile } = useTeacherLocale();
+  const m = profile.messages;
   const boardRef = useRef<TeacherBoardHandle>(null);
   const status = statusFor(
     teacher,
@@ -178,6 +183,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
     lessonProgress,
     variant,
     teacherStarting,
+    m.stage,
   );
   const isPreview = variant === "preview";
   const showAvatarBesideBoard = avatarPlacement === "side" && !isPreview;
@@ -223,7 +229,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
           ? "min-h-[300px] sm:min-h-[420px]"
           : "min-h-0"
       }`}
-      aria-label="AI Teacher blackboard"
+      aria-label={m.stage.blackboard}
       data-testid="teacher-stage"
       data-teacher-elements={Object.keys(teacher.boardState.elements).length}
     >
@@ -242,7 +248,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
 
           <div className="pointer-events-none absolute left-5 top-5 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-slate-100 shadow-lg backdrop-blur-xl sm:left-6 sm:top-6">
             <MdSchool className="text-base text-cyan-300" />
-            AI Teacher
+            {m.brand.teacher}
           </div>
 
           <div
@@ -258,7 +264,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
           {!showAvatarBesideBoard && (
             <aside
               className={`absolute bottom-4 right-4 z-30 overflow-hidden rounded-2xl border border-cyan-200/35 bg-slate-950 shadow-[0_20px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.04)] sm:bottom-5 sm:right-5 ${overlayAvatarFrameClass(avatarAspectRatio, isPreview)}`}
-              aria-label="AI teacher picture in picture"
+              aria-label={m.stage.pip}
             >
               {avatar}
             </aside>
@@ -277,7 +283,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
                 className="inline-flex h-8 items-center gap-1.5 rounded-full border border-cyan-200/20 bg-slate-900/80 px-3 text-xs font-semibold text-cyan-50 transition hover:border-cyan-200/40 hover:bg-slate-800/90 focus:outline-none focus:ring-2 focus:ring-cyan-300"
               >
                 <MdPlayArrow className="text-base" />
-                Play demo lesson
+                {m.stage.play}
               </button>
             )}
             {teacher.connection === "demo" && (
@@ -285,8 +291,8 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
                 type="button"
                 onClick={handlePauseDemo}
                 className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-slate-900/80 text-slate-200 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-300"
-                aria-label="Pause demo lesson"
-                title="Pause demo lesson"
+                aria-label={m.stage.pause}
+                title={m.stage.pause}
               >
                 <MdPause />
               </button>
@@ -295,8 +301,8 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
               type="button"
               onClick={handleClear}
               className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-slate-900/80 text-slate-300 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300"
-              aria-label="Clear blackboard"
-              title="Clear blackboard"
+              aria-label={m.stage.clear}
+              title={m.stage.clear}
             >
               <MdDeleteOutline />
             </button>
@@ -307,7 +313,7 @@ const TeacherStage: React.FC<TeacherStageProps> = ({
       {showAvatarBesideBoard && (
         <aside
           className={`flex h-[132px] w-full shrink-0 items-end justify-end lg:h-full ${sideRailClass(avatarAspectRatio)}`}
-          aria-label="AI teacher video panel"
+          aria-label={m.stage.videoPanel}
         >
           <div
             className={`overflow-hidden rounded-2xl border border-cyan-200/35 bg-slate-950 shadow-[0_20px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.04)] ${sideAvatarFrameClass(avatarAspectRatio)}`}

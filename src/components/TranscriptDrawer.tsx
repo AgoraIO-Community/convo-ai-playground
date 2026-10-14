@@ -1,10 +1,13 @@
 "use client";
 
+import type { TeacherMessages } from "@/locales";
+import { englishMessages } from "@/locales/en-US";
 import { useEffect, useRef, type ReactNode } from "react";
 import { MdChat } from "react-icons/md";
 
 interface TranscriptDrawerProps {
   isOpen: boolean;
+  labels?: TeacherMessages["transcript"];
   onOpen(): void;
   onClose(): void;
   children: ReactNode;
@@ -15,6 +18,7 @@ const TranscriptDrawer: React.FC<TranscriptDrawerProps> = ({
   onOpen,
   onClose,
   children,
+  labels = englishMessages.transcript,
 }) => {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -44,7 +48,7 @@ const TranscriptDrawer: React.FC<TranscriptDrawerProps> = ({
         ref={triggerRef}
         type="button"
         onClick={onOpen}
-        aria-label="Open transcript and chat"
+        aria-label={labels.open}
         aria-controls="live-transcript-drawer"
         aria-expanded={isOpen}
         className={`absolute left-0 top-1/2 z-40 flex -translate-y-1/2 items-center gap-2 rounded-r-full border border-l-0 border-cyan-200/20 bg-slate-950/90 px-3 py-2.5 text-xs font-semibold text-cyan-50 shadow-xl backdrop-blur transition duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-inset motion-reduce:transition-none ${
@@ -54,14 +58,14 @@ const TranscriptDrawer: React.FC<TranscriptDrawerProps> = ({
         }`}
       >
         <MdChat aria-hidden className="text-base text-cyan-300" />
-        <span className="hidden sm:inline">Transcript</span>
+        <span className="hidden sm:inline">{labels.tab}</span>
       </button>
 
       <div className="pointer-events-none absolute inset-0 z-40">
         <button
           type="button"
           tabIndex={-1}
-          aria-label="Close transcript drawer"
+          aria-label={labels.closeDrawer}
           onClick={onClose}
           className={`absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] transition-opacity duration-300 motion-reduce:transition-none ${
             isOpen
@@ -74,7 +78,7 @@ const TranscriptDrawer: React.FC<TranscriptDrawerProps> = ({
           ref={panelRef}
           role="dialog"
           aria-modal="true"
-          aria-label="Live transcript and chat"
+          aria-label={labels.dialog}
           aria-hidden={!isOpen}
           tabIndex={-1}
           inert={!isOpen}

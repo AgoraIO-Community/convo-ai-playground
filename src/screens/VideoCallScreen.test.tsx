@@ -94,9 +94,12 @@ vi.mock("@/components/teacher/TeacherStage", () => ({
 }));
 
 import VideoCallScreen from "./VideoCallScreen";
+import { TeacherLocaleProvider } from "@/locales/TeacherLocaleProvider";
 
 describe("VideoCallScreen transcript transport", () => {
   beforeEach(() => {
+    mocks.cancelLesson.mockClear();
+    mocks.clearBoard.mockClear();
     vi.stubEnv("NEXT_PUBLIC_AI_TEACHER_MODE", "true");
     vi.clearAllMocks();
     mocks.leaveCall.mockResolvedValue(undefined);
@@ -132,6 +135,38 @@ describe("VideoCallScreen transcript transport", () => {
       "data-experience-mode",
       "voice",
     );
+  });
+
+  it("clears conversation and board before enabling a new English lesson", () => {
+    useAppStore.setState({ userSentMessages: [{ text: "Portuguese question", _time: 1 }] });
+    render(<TeacherLocaleProvider initialLocale="pt-BR"><VideoCallScreen /></TeacherLocaleProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "English" }));
+    expect(mocks.cancelLesson).toHaveBeenCalledOnce();
+    expect(mocks.clearBoard).toHaveBeenCalledOnce();
+    expect(mocks.cancelLesson.mock.invocationCallOrder[0]).toBeLessThan(mocks.clearBoard.mock.invocationCallOrder[0]);
+    expect(useAppStore.getState().userSentMessages).toEqual([]);
+    expect(screen.getByText("AI Teacher classroom")).toBeInTheDocument();
+    expect(document.documentElement.lang).toBe("en-US");
+  });
+
+  it.each([{ isAgentLoading: true }, { isAgentUpdating: true }, { isAgentActive: true }])("locks language throughout the agent lifecycle %j", (flags) => {
+    useAppStore.setState({ isAgentLoading: false, isAgentUpdating: false, isAgentActive: false, ...flags });
+    render(<TeacherLocaleProvider initialLocale="pt-BR"><VideoCallScreen /></TeacherLocaleProvider>);
+    expect(screen.getByRole("button", { name: "English" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "English" }));
+    expect(document.documentElement.lang).toBe("pt-BR");
+    expect(mocks.clearBoard).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale enabled picker event when the store says the agent is active", () => {
+    render(<TeacherLocaleProvider initialLocale="pt-BR"><VideoCallScreen /></TeacherLocaleProvider>);
+    const state = useAppStore.getState();
+    const getState = vi.spyOn(useAppStore, "getState").mockReturnValueOnce({ ...state, isAgentActive: true });
+    fireEvent.click(screen.getByRole("button", { name: "English" }));
+    expect(mocks.clearBoard).not.toHaveBeenCalled();
+    expect(document.documentElement.lang).toBe("pt-BR");
+    expect(mocks.showToast).toHaveBeenCalledWith("Pare a professora antes de mudar o idioma.", "info");
+    getState.mockRestore();
   });
 
   it("shows RTM connectivity and enables chat in RTM mode", async () => {
