@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { planTeacherLesson } from "./lessonPlanner";
 
-const validLesson = {
+const validLesson: { topic: string; cues: { cue_id: string; speech: string; operations: Record<string, unknown>[] }[] } = {
   topic: "Agent loop",
   cues: [
     {
@@ -64,6 +64,28 @@ const validLesson = {
 };
 
 describe("planTeacherLesson", () => {
+  it("repairs an English response into the requested Brazilian Portuguese", async () => {
+    const englishPlan = structuredClone(validLesson);
+    englishPlan.cues[0].speech = "The agent is observing its environment with this information, then it will choose an action from the available options.";
+    const pt = structuredClone(validLesson);
+    pt.topic = "Ciclo do agente";
+    const speech = [
+      "Uma agente começa observando o ambiente para entender sua situação e descobrir o que precisa fazer.",
+      "Então ela usa essas informações para escolher uma ação de acordo com o que você pediu.",
+      "O resultado volta para a agente, que verifica se sua ação funcionou e decide o próximo passo.",
+      "Você pode acompanhar esse ciclo no quadro: observar, decidir, agir e verificar o resultado com atenção.",
+    ];
+    pt.cues.forEach((cue, index) => { cue.speech = speech[index]; });
+    const response = (lesson: typeof validLesson) => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(lesson) } }] }), { status: 200 });
+    const fetchMock = vi.spyOn(global, "fetch").mockResolvedValueOnce(response(englishPlan)).mockResolvedValueOnce(response(pt));
+    const result = await planTeacherLesson({ turnId: "turn-pt", question: "Como funciona um agente?", mode: "lesson", context: [], boardSummary: "", locale: "pt-BR" });
+    expect(result.topic).toBe("Ciclo do agente");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const payload = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(JSON.parse(payload.messages[1].content)).toMatchObject({ response_locale: "pt-BR" });
+    expect(payload.messages[0].content).toContain("Brazilian Portuguese");
+    expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("pt-BR");
+  });
   beforeEach(() => {
     vi.useFakeTimers();
     process.env.TEACHER_DIRECTOR_API_KEY = "test-key";
@@ -103,6 +125,7 @@ describe("planTeacherLesson", () => {
     const resultPromise = planTeacherLesson({
       turnId: "turn-1",
       question: "How does an AI agent loop work?",
+      locale: "en-US",
       context: [],
       boardSummary: "",
       mode: "lesson",
@@ -156,6 +179,7 @@ describe("planTeacherLesson", () => {
     const result = await planTeacherLesson({
       turnId: "turn-overlap",
       question: "How does an AI agent work?",
+      locale: "en-US",
       context: [],
       boardSummary: "",
       mode: "lesson",

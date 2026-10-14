@@ -1,3 +1,5 @@
+import type { TeacherLocale } from "@/locales";
+
 export type TeacherColor =
   | "white"
   | "cyan"
@@ -94,6 +96,18 @@ export interface TeacherLessonProgress {
 export interface TeacherLessonContextItem {
   role: "user" | "assistant";
   text: string;
+}
+
+export interface TeacherLessonRequestWire {
+  question: string;
+  mode: TeacherLessonMode;
+  locale?: string;
+  context: TeacherLessonContextItem[];
+  boardSummary: string;
+  parentTopic?: string;
+}
+export interface ValidatedTeacherLessonRequest extends Omit<TeacherLessonRequestWire, "locale"> {
+  locale: TeacherLocale;
 }
 
 export type TeacherLessonStatus =

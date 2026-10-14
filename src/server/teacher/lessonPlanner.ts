@@ -10,6 +10,8 @@ import type {
   TeacherLessonPlan,
 } from "@/types/teacher";
 import { AI_TEACHER_DIRECTOR_DEFAULT_MODEL } from "@/constants/aiTeacherDefaults";
+import { getTeacherLocaleProfile, type TeacherLocale } from "@/locales";
+import { assertTeacherLessonLocale } from "@/lib/teacher/lessonLocale";
 
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = AI_TEACHER_DIRECTOR_DEFAULT_MODEL;
@@ -37,6 +39,7 @@ Allowed operations and fields only:
 Allowed colors: white, cyan, blue, green, amber, red. IDs use letters, numbers, dot, underscore, colon, or hyphen and are at most 80 characters. Board text is at most 500 characters. Each spoken cue must be at most 450 UTF-8 bytes. Use at most 64 operations across the lesson. Do not output markdown fences or properties outside the required shape.`;
 
 export interface PlanTeacherLessonInput {
+  locale: TeacherLocale;
   turnId: string;
   question: string;
   context: TeacherLessonContextItem[];
@@ -126,11 +129,13 @@ async function requestPlanContent(
       reasoning_effort: "low",
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: SYSTEM_PROMPT + "\n\n" + getTeacherLocaleProfile(input.locale).lessonDirector.localeInstruction },
         {
           role: "user",
           content: JSON.stringify({
             lesson_mode: input.mode,
+            response_locale: input.locale,
+            locale_instruction: getTeacherLocaleProfile(input.locale).lessonDirector.localeInstruction,
             learner_question: input.question,
             parent_topic: input.parentTopic,
             recent_conversation: input.context,
@@ -180,6 +185,7 @@ function parsePlanContent(
     parseTeacherLessonPlan(planWire, input.turnId),
   );
   assertTeacherLessonQuality(plan, input.mode);
+  assertTeacherLessonLocale(plan, input.locale);
   return plan;
 }
 
@@ -204,7 +210,8 @@ export async function planTeacherLesson(
     } catch (error) {
       if (!(error instanceof TeacherLessonValidationError)) throw error;
       console.warn("[teacher-director] initial lesson plan needs repair", {
-        reason: error.message,
+        category: error.name,
+        locale: input.locale,
         mode: input.mode,
       });
       repaired = true;
@@ -219,6 +226,7 @@ export async function planTeacherLesson(
     const stats = assertTeacherLessonQuality(plan, input.mode);
     console.info("[teacher-director] lesson plan ready", {
       mode: input.mode,
+      locale: input.locale,
       repaired,
       cueCount: stats.cueCount,
       totalOperations: stats.totalOperations,

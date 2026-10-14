@@ -2,6 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod/v4";
 import { auth } from "@/auth";
+import { getTeacherLocaleProfile } from "@/locales";
+import type { ValidatedTeacherLessonRequest } from "@/types/teacher";
 import { TeacherLessonValidationError } from "@/lib/teacher/lessonSchema";
 import {
   planTeacherLesson,
@@ -18,6 +20,7 @@ export const dynamic = "force-dynamic";
 
 const requestSchema = z
   .object({
+    locale: z.enum(["pt-BR", "en-US"]).optional().default("pt-BR"),
     question: z.string().trim().min(1).max(2_000),
     context: z
       .array(
@@ -96,9 +99,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
+    const input: ValidatedTeacherLessonRequest = parsed.data;
     const plan = await planTeacherLesson(
       {
         turnId,
+        locale: input.locale,
         question: parsed.data.question,
         context: parsed.data.context,
         boardSummary: parsed.data.boardSummary,
@@ -130,10 +135,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             ? error.upstreamStatus
             : null,
         category: error.name,
-        reason: error.message,
+        locale: parsed.data.locale,
       });
       return NextResponse.json(
-        { error: "Teacher lesson planner returned an invalid response." },
+        { error: getTeacherLocaleProfile(parsed.data.locale).messages.lesson.invalid },
         { status: 502 },
       );
     }
@@ -142,7 +147,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       category: error instanceof Error ? error.name : "UnknownError",
     });
     return NextResponse.json(
-      { error: "Unable to prepare the teacher lesson." },
+      { error: getTeacherLocaleProfile(parsed.data.locale).messages.lesson.requestFailed },
       { status: 500 },
     );
   }
