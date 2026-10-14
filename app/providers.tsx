@@ -12,10 +12,12 @@ import {
   setVoiceSettings,
 } from "@/services/settingsDb";
 import { getDefaultSettings } from "@/components/SettingsSidebar";
+import { TeacherLocaleProvider } from "@/locales/TeacherLocaleProvider";
+import type { TeacherLocale } from "@/locales";
 
 const queryClient = new QueryClient();
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children, initialLocale }: { children: React.ReactNode; initialLocale: TeacherLocale }) {
   const theme = useAppStore((state) => state.theme);
   const setAgentSettings = useAppStore((state) => state.setAgentSettings);
   const setSelectedMicrophoneId = useAppStore(
@@ -69,11 +71,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, [setAgentSettings, setSelectedMicrophoneId]);
 
   return (
+    <TeacherLocaleProvider initialLocale={initialLocale}>
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
         {children}
         <ToastContainer />
       </QueryClientProvider>
     </SessionProvider>
+    </TeacherLocaleProvider>
   );
 }
