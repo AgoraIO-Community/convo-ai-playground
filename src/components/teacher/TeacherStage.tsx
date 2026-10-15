@@ -49,6 +49,9 @@ function overlayAvatarFrameClass(
   compact: boolean,
 ): string {
   if (compact) {
+    if (aspectRatio === "2x3") {
+      return "aspect-[2/3] w-[clamp(100px,12vw,160px)] max-w-[26%]";
+    }
     return "aspect-[3/2] w-[clamp(170px,24vw,260px)] max-w-[30%]";
   }
   if (aspectRatio === "1x1") {

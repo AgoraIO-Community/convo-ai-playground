@@ -3,8 +3,10 @@ export const LEMON_SLICE_DEFAULT_API_BASE_URL =
 
 export const LEMON_SLICE_AVATAR_ID = "lemonslice" as const;
 
+export const LEMON_SLICE_TEACHER_IMAGE_PATH =
+  "/images/ai-teacher-portuguese-young.png";
 export const LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL =
-  "https://lemonslice.com/flash-test.jpg";
+  `https://agora-convo-ai-teacher.vercel.app${LEMON_SLICE_TEACHER_IMAGE_PATH}`;
 
 /** Legacy alias for deployments that stored the image URL as avatar_id. */
 export const LEMON_SLICE_DEFAULT_AVATAR_ID =

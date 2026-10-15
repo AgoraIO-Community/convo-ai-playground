@@ -1,7 +1,14 @@
 import { DEFAULT_TEACHER_LOCALE, getTeacherLocaleProfile, type TeacherLocale } from "@/locales";
 import { enUS } from "@/locales/en-US";
 export { AI_TEACHER_NAME } from "@/locales/shared";
-import type { AgentSettings, TurnDetectionConfig } from "@/types/agora";
+import type { AgentSettings, AvatarConfig, AvatarLemonSliceParams, TurnDetectionConfig } from "@/types/agora";
+import {
+  LEMON_SLICE_AVATAR_ID,
+  LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL,
+  LEMON_SLICE_DEFAULT_API_BASE_URL,
+  LEMON_SLICE_DEFAULT_AREA,
+  LEMON_SLICE_DEFAULT_QUALITY,
+} from "./lemonSlice";
 
 export const AI_TEACHER_DEFAULT_MODEL = "gpt-5.6-terra";
 export const AI_TEACHER_DIRECTOR_DEFAULT_MODEL = "gpt-6-sol";
@@ -44,25 +51,40 @@ export const AI_TEACHER_TURN_DETECTION: TurnDetectionConfig = {
   },
 };
 
+export function getAiTeacherAvatarDefaults(avatar?: AvatarConfig): AvatarConfig {
+  // Only carry over LemonSlice credentials; another vendor's key is not reusable.
+  const savedParams = avatar?.vendor === "lemonslice"
+    ? avatar.params as AvatarLemonSliceParams
+    : undefined;
+  return {
+    enable: true,
+    vendor: "lemonslice",
+    params: {
+      api_key: "",
+      agora_uid: "",
+      api_base_url: LEMON_SLICE_DEFAULT_API_BASE_URL,
+      sample_rate: 24000,
+      quality: LEMON_SLICE_DEFAULT_QUALITY,
+      version: "v1",
+      video_encoding: "H264",
+      activity_idle_timeout: 120,
+      area: LEMON_SLICE_DEFAULT_AREA,
+      ...savedParams,
+      avatar_id: LEMON_SLICE_AVATAR_ID,
+      agent_image_url: LEMON_SLICE_DEFAULT_AGENT_IMAGE_URL,
+      aspect_ratio: "2x3",
+    },
+  };
+}
+
 export function withAiTeacherRuntimeDefaults(
   settings: AgentSettings,
   locale: TeacherLocale = DEFAULT_TEACHER_LOCALE,
 ): AgentSettings {
   const profile = getTeacherLocaleProfile(locale);
-  const teacherAvatar =
-    settings.avatar?.vendor === "lemonslice"
-      ? {
-          ...settings.avatar,
-          params: {
-            ...settings.avatar.params,
-            aspect_ratio: "2x3" as const,
-          },
-        }
-      : settings.avatar;
-
   return {
     ...settings,
-    avatar: teacherAvatar,
+    avatar: getAiTeacherAvatarDefaults(settings.avatar),
     asr: {
       ...(settings.asr?.vendor === "deepgram" ? settings.asr : {}),
       credential_mode: "byok",

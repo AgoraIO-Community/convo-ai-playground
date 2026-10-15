@@ -48,6 +48,8 @@ import {
   isHttpUrl,
 } from "@/constants/lemonSlice";
 import { ELEVENLABS_DEFAULT_VOICE_ID } from "@/constants/elevenlabsDefaults";
+import { getAiTeacherAvatarDefaults } from "@/constants/aiTeacherDefaults";
+import { isAiTeacherModeEnabled } from "@/constants/featureFlags";
 import { SARVAM_BULBUL_V2_PLACEHOLDER_PARAMS } from "@/constants/sarvamTts";
 import { queryAgentTurns } from "@/api/agentApi";
 import type {
@@ -883,18 +885,16 @@ export const getDefaultSettings = (): AgentSettingsType => {
       mode: "start_of_speech",
       disabled_config: { strategy: "append" },
     },
-    avatar: {
-      enable: true,
-      vendor: "anam",
-      params: getDefaultAvatarParams("anam"),
-    },
+    avatar: getAiTeacherAvatarDefaults(),
   };
 };
 
 function normalizeForActiveSettings(
   settings: AgentSettingsType,
 ): AgentSettingsType {
-  return settings;
+  return isAiTeacherModeEnabled()
+    ? { ...settings, avatar: getAiTeacherAvatarDefaults(settings.avatar) }
+    : settings;
 }
 
 function cloneSettingsBlock<T>(value: T): T {
@@ -2247,7 +2247,7 @@ const AgentSettingsSidebarContent: React.FC<{
     getDefaultASRVendor(),
   );
   const [selectedAvatarVendor, setSelectedAvatarVendor] =
-    React.useState<AvatarVendor>("anam");
+    React.useState<AvatarVendor>(settings.avatar?.vendor ?? "lemonslice");
   const isOpenAIByok =
     settings.llm.credential_mode !== "managed" &&
     selectedLLMVendor === "openai";
@@ -2320,7 +2320,9 @@ const AgentSettingsSidebarContent: React.FC<{
         }),
       );
       if (existingSettings.avatar?.vendor) {
-        setSelectedAvatarVendor(existingSettings.avatar.vendor);
+        setSelectedAvatarVendor(
+          normalizeForActiveSettings(existingSettings).avatar!.vendor,
+        );
       }
       if (
         existingSettings.llm?.provider_config?.provider === "amazon_bedrock" ||

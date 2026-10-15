@@ -21,7 +21,7 @@ vi.mock("@/components/teacher/TeacherStage", () => ({
 import TeacherDemoLandingScreen from "./TeacherDemoLandingScreen";
 
 describe("TeacherDemoLandingScreen", () => {
-  it("previews the same Samira identity used by the live Anam teacher", () => {
+  it("previews the approved young teacher portrait used by LemonSlice", () => {
     render(
       <TeacherDemoLandingScreen
         phase="landing"
@@ -32,7 +32,7 @@ describe("TeacherDemoLandingScreen", () => {
 
     expect(screen.getByRole("img", { name: "Samira preview" })).toHaveAttribute(
       "src",
-      "/images/ai-teacher-samira-anam.png",
+      "/images/ai-teacher-portuguese-young.png",
     );
   });
 });

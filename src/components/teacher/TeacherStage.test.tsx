@@ -27,7 +27,7 @@ function createTeacher(): UseTeacherBoardSessionResult {
 }
 
 describe("TeacherStage", () => {
-  it("uses a landscape frame for the landing-page teacher preview", () => {
+  it("keeps the full portrait visible in a compact landing-page teacher frame", () => {
     render(
       <TeacherStage
         active
@@ -36,13 +36,14 @@ describe("TeacherStage", () => {
         agentState={EAgentState.SPEAKING}
         transcriptionMode="rtm"
         variant="preview"
-        previewAvatarImageSrc="/images/ai-teacher-samira-anam.png"
+        previewAvatarImageSrc="/images/ai-teacher-portuguese-young.png"
+        avatarAspectRatio="2x3"
       />,
     );
 
     expect(
       screen.getByLabelText("Vídeo da professora sobre o quadro"),
-    ).toHaveClass("aspect-[3/2]");
+    ).toHaveClass("aspect-[2/3]");
   });
 
   it("keeps lesson actions outside the interactive whiteboard surface", () => {

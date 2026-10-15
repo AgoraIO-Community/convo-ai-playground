@@ -38,6 +38,33 @@ function createSettings(): AgentSettings {
 }
 
 describe("withAiTeacherRuntimeDefaults", () => {
+  it("replaces saved Anam settings with the public LemonSlice teacher without reusing Anam credentials", () => {
+    const settings = createSettings();
+    settings.avatar = { enable: false, vendor: "anam", params: { api_key: "anam-only-key", agora_uid: "999999", avatar_id: "old-anam-avatar" } };
+    const saved = structuredClone(settings);
+    const result = withAiTeacherRuntimeDefaults(settings);
+    expect(result.avatar).toMatchObject({
+      enable: true, vendor: "lemonslice",
+      params: { api_key: "", avatar_id: "lemonslice", aspect_ratio: "2x3", agent_image_url: "https://agora-convo-ai-teacher.vercel.app/images/ai-teacher-portuguese-young.png" },
+    });
+    expect(settings).toEqual(saved);
+  });
+
+  it("keeps LemonSlice credentials and model but uses the approved public portrait", () => {
+    const settings = createSettings();
+    settings.avatar!.params = { ...settings.avatar!.params, model: "flash" };
+    const result = withAiTeacherRuntimeDefaults(settings);
+    expect(result.avatar).toMatchObject({
+      vendor: "lemonslice", params: { api_key: "test-key", model: "flash", aspect_ratio: "2x3", agent_image_url: "https://agora-convo-ai-teacher.vercel.app/images/ai-teacher-portuguese-young.png" },
+    });
+  });
+
+  it("enables the LemonSlice teacher when no avatar was saved", () => {
+    const settings = createSettings();
+    delete settings.avatar;
+    expect(withAiTeacherRuntimeDefaults(settings).avatar).toMatchObject({ enable: true, vendor: "lemonslice", params: { api_key: "", avatar_id: "lemonslice" } });
+  });
+
   it.each([undefined, "managed"] as const)("uses explicit BYOK ASR instead of stale credential mode %s", (credentialMode) => {
     const settings = createSettings();
     settings.asr = { vendor: "deepgram", credential_mode: credentialMode, params: { api_key: "", model: "nova-2" } };

@@ -9,7 +9,6 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import useAppStore from "@/store/useAppStore";
 import { ASR_PRESETS, TTS_PRESETS, type AgentSettings } from "@/types/agora";
-import { ANAM_DEFAULT_AVATAR_ID } from "@/constants/anamAvatars";
 import SettingsSidebar, {
   getDefaultASRConfig,
   getDefaultSettings,
@@ -61,8 +60,8 @@ describe("SettingsSidebar provider defaults", () => {
     });
     expect(defaults.avatar).toMatchObject({
       enable: true,
-      vendor: "anam",
-      params: { avatar_id: ANAM_DEFAULT_AVATAR_ID },
+      vendor: "lemonslice",
+      params: { avatar_id: "lemonslice", aspect_ratio: "2x3", agent_image_url: "https://agora-convo-ai-teacher.vercel.app/images/ai-teacher-portuguese-young.png" },
     });
   });
 });
