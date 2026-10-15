@@ -94,7 +94,7 @@ const VoiceSettings: React.FC<VoiceSettingsProps> = ({ localMicrophoneTrack }) =
     setError(null);
 
     try {
-      const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
+      const AgoraRTC = (await import("@/lib/agora/rtcSdk")).default;
       const microphones = await AgoraRTC.getMicrophones();
 
       const formattedDevices: AudioDevice[] = microphones.map((device) => ({
@@ -131,7 +131,7 @@ const VoiceSettings: React.FC<VoiceSettingsProps> = ({ localMicrophoneTrack }) =
   useEffect(() => {
     const setupDeviceChangeListener = async () => {
       try {
-        const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
+        const AgoraRTC = (await import("@/lib/agora/rtcSdk")).default;
 
         AgoraRTC.onMicrophoneChanged = async (changedDevice) => {
           console.log("Microphone changed:", changedDevice);
@@ -164,7 +164,7 @@ const VoiceSettings: React.FC<VoiceSettingsProps> = ({ localMicrophoneTrack }) =
     setupDeviceChangeListener();
 
     return () => {
-      import("agora-rtc-sdk-ng").then(({ default: AgoraRTC }) => {
+      import("@/lib/agora/rtcSdk").then(({ default: AgoraRTC }) => {
         AgoraRTC.onMicrophoneChanged = undefined;
       });
     };
@@ -196,7 +196,7 @@ const VoiceSettings: React.FC<VoiceSettingsProps> = ({ localMicrophoneTrack }) =
     audioChunksRef.current = [];
 
     try {
-      const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
+      const AgoraRTC = (await import("@/lib/agora/rtcSdk")).default;
 
       // Create a temporary track for testing
       const testTrack = await AgoraRTC.createMicrophoneAudioTrack({

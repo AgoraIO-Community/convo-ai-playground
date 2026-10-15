@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useSyncExternalStore } from "react";
-import AgoraRTC from "agora-rtc-sdk-ng";
+import AgoraRTC from "@/lib/agora/rtcSdk";
 import type {
   IAgoraRTCClient,
   IAgoraRTCRemoteUser,
@@ -230,6 +230,7 @@ export const useAgora = () => {
     async (
       session: RtcSessionResponse,
       enableRtm: boolean = true,
+      enableVideo: boolean = true,
     ): Promise<void> => {
       const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID;
       if (!appId) {
@@ -245,7 +246,7 @@ export const useAgora = () => {
         localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack(
           microphoneId ? { microphoneId } : undefined,
         );
-        localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+        localVideoTrack = enableVideo ? await AgoraRTC.createCameraVideoTrack() : null;
         useAppStore
           .getState()
           .setLocalTracks(localAudioTrack, localVideoTrack);
@@ -259,7 +260,7 @@ export const useAgora = () => {
           session.rtcToken,
           session.rtcUid,
         );
-        await client.publish([localAudioTrack, localVideoTrack]);
+        await client.publish(localVideoTrack ? [localAudioTrack, localVideoTrack] : [localAudioTrack]);
       } catch (error) {
         await cleanupAgoraConnections();
         throw error;

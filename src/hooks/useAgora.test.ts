@@ -123,6 +123,7 @@ describe("useAgora direct session", () => {
     ).toBeLessThan(mocks.order.indexOf("create-client"));
   });
 
+
   it("uses one identity and channel for RTM and RTC, then publishes", async () => {
     const { useAgora } = await import("./useAgora");
     const { result } = renderHook(() => useAgora());
@@ -169,6 +170,17 @@ describe("useAgora direct session", () => {
     expect(mocks.rtcClient.join).toHaveBeenCalledOnce();
     expect(mocks.rtcClient.publish).toHaveBeenCalledOnce();
     expect(result.current.rtmClient).toBeNull();
+  });
+
+  it("starts a voice-only classroom without requesting the learner camera", async () => {
+    const { useAgora } = await import("./useAgora");
+    const { result } = renderHook(() => useAgora());
+    await act(async () => {
+      await result.current.joinMeeting(session, true, false);
+    });
+    expect(mocks.createCameraVideoTrack).not.toHaveBeenCalled();
+    expect(mocks.rtcClient.publish).toHaveBeenCalledWith([mocks.audioTrack]);
+    expect(result.current.localTracks.videoTrack).toBeNull();
   });
 
   it("connects and disconnects RTM for the active RTC session", async () => {

@@ -58,6 +58,7 @@ const CallBootstrapScreen: React.FC<CallBootstrapScreenProps> = ({
         await joinMeeting(
           session,
           getTranscriptTransport(agentSettings) === "rtm",
+          !teacherModeEnabled,
         );
         callStart({
           displayName: session.displayName,

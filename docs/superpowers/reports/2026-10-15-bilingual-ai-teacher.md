@@ -2,6 +2,22 @@
 
 Branch: `feature/ai-teacher-finalize`. Implemented natively in the existing feature worktree; no separate deployment or internationalization dependency.
 
+## Subsequent approved startup fixes (2026-10-15)
+
+The user superseded the original persistence requirement: every fresh visit/reload now starts in Brazilian Portuguese. English is an in-memory choice for the current visit only. The old locale cookie is expired; no language is read from or written to localStorage, sessionStorage, or IndexedDB.
+
+Teacher runtime ASR now explicitly uses BYOK Deepgram Nova-3, independent of stale saved credential mode. Teacher bootstrapping no longer opens the learner camera; normal video calls retain camera publishing.
+
+The in-app browser exposed a native `setConfiguration` method that rejected even unchanged peer configuration. A pre-SDK capability probe marks only that broken optional API unavailable so Agora's existing fallback creates peers with their final configuration. Working browsers are not patched. Probe resources close, unrelated failures propagate, and no authentication, ICE policy, or encryption settings change. The earlier pre-creation SDK flag and field-merging attempts did not resolve the browser error and were removed.
+
+Latest automated verification: **69 files / 338 tests passed**, and **production build passed**.
+
+Live in-app test: agent invite returned 200/RUNNING, the RTC client reached CONNECTED, and the previous configuration exception no longer occurred in the fresh session. ASR/lesson events and live agent metrics arrived. However, the only remote agent participant reported no published audio/video, and the expected avatar participant never joined. No playable media element appeared. Audio and avatar playback are therefore **not verified**; upstream media publication remains unresolved despite zero reported live provider errors. Provider-side startup logs/credential/session availability need investigation before declaring the end-to-end demo ready.
+
+The test call was ended. On the authenticated landing page, selecting English changed the UI and native drawing controls to English; reloading returned both to Brazilian Portuguese. At that checkpoint, these follow-up changes were local and had not been pushed.
+
+Later user verification confirmed the demo worked after correcting the Agora API base URL: the local gateway rejected Deepgram, while the official Agora endpoint accepted it. This is user-reported end-to-end confirmation, not a replacement for the earlier recorded browser observations. At the user's request, classroom auto-start is temporarily disabled so settings can be edited; manual Start remains available. The avatar default remains Anam/Samira; no Kyra/Kiara change was made.
+
 ## Delivered
 
 - Brazilian Portuguese (`pt-BR`) is the Teacher Mode default; English (`en-US`) is the other supported locale.

@@ -65,6 +65,7 @@ export function withAiTeacherRuntimeDefaults(
     avatar: teacherAvatar,
     asr: {
       ...(settings.asr?.vendor === "deepgram" ? settings.asr : {}),
+      credential_mode: "byok",
       vendor: "deepgram",
       language: profile.asr.language,
       params: {

@@ -38,6 +38,16 @@ function createSettings(): AgentSettings {
 }
 
 describe("withAiTeacherRuntimeDefaults", () => {
+  it.each([undefined, "managed"] as const)("uses explicit BYOK ASR instead of stale credential mode %s", (credentialMode) => {
+    const settings = createSettings();
+    settings.asr = { vendor: "deepgram", credential_mode: credentialMode, params: { api_key: "", model: "nova-2" } };
+    const result = withAiTeacherRuntimeDefaults(settings, "pt-BR");
+    expect(result.asr).toMatchObject({
+      vendor: "deepgram", credential_mode: "byok", language: "pt-BR",
+      params: { model: "nova-3", language: "pt-BR" },
+    });
+    expect(settings.asr.credential_mode).toBe(credentialMode);
+  });
   it("applies Brazilian Portuguese at runtime without mutating saved providers", () => {
     const settings = createSettings();
     settings.asr = { vendor: "microsoft", language: "en-US", params: { region: "westus", key: "azure-key" } };

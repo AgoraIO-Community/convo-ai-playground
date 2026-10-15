@@ -446,9 +446,8 @@ const VideoCallScreen: React.FC = () => {
         teacherSession={
           callExperienceMode === "teacher" ? teacher.session : null
         }
-        autoStartAgent={
-          teacherModeEnabled && callExperienceMode === "teacher"
-        }
+        // Temporarily keep startup manual so classroom settings can be edited.
+        autoStartAgent={false}
         onTeacherModeToggle={
           teacherModeEnabled ? handleTeacherModeToggle : undefined
         }

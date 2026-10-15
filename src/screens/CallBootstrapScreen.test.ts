@@ -108,6 +108,7 @@ describe("CallBootstrapScreen", () => {
     ).not.toBeInTheDocument();
     await waitFor(() => expect(mocks.joinMeeting).toHaveBeenCalledTimes(1));
     expect(mocks.createRtcSession).toHaveBeenCalledTimes(1);
+    expect(mocks.joinMeeting).toHaveBeenCalledWith(rtcSession, false, true);
   });
 
   it("creates and joins one session under React Strict Mode", async () => {
@@ -123,7 +124,7 @@ describe("CallBootstrapScreen", () => {
 
     await waitFor(() => expect(mocks.joinMeeting).toHaveBeenCalledTimes(1));
     expect(mocks.createRtcSession).toHaveBeenCalledTimes(1);
-    expect(mocks.joinMeeting).toHaveBeenCalledWith(rtcSession, false);
+    expect(mocks.joinMeeting).toHaveBeenCalledWith(rtcSession, false, false);
     expect(mocks.callStart).toHaveBeenCalledWith({
       displayName: "Ada Lovelace",
       rtcUid: "42",
@@ -142,7 +143,7 @@ describe("CallBootstrapScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enter classroom" }));
 
     await waitFor(() => expect(mocks.joinMeeting).toHaveBeenCalledTimes(1));
-    expect(mocks.joinMeeting).toHaveBeenCalledWith(rtcSession, true);
+    expect(mocks.joinMeeting).toHaveBeenCalledWith(rtcSession, true, false);
   });
 
   it("shows a retry action and creates a fresh session after failure", async () => {

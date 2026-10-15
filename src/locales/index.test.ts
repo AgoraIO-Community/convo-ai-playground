@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getTeacherLocaleProfile, parseTeacherLocale, serializeTeacherLocaleCookie } from "./index";
+import { getTeacherLocaleProfile, parseTeacherLocale } from "./index";
 
 describe("teacher locale preferences", () => {
   it("defaults malformed preferences to Brazilian Portuguese", () => {
@@ -12,9 +12,5 @@ describe("teacher locale preferences", () => {
     expect(getTeacherLocaleProfile("en-US").asr.language).toBe("en-US");
     expect(getTeacherLocaleProfile("pt-BR").agent.greeting).toContain("{{username}}");
     expect(getTeacherLocaleProfile("pt-BR").messages.landing.enter).toBeTruthy();
-  });
-  it("persists a host-only preference through OAuth and refresh", () => {
-    expect(serializeTeacherLocaleCookie("en-US", false)).toBe("ai_teacher_locale=en-US; Path=/; SameSite=Lax; Max-Age=31536000");
-    expect(serializeTeacherLocaleCookie("pt-BR", true)).toContain("; Secure");
   });
 });

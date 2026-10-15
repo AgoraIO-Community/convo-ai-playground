@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { DEFAULT_TEACHER_LOCALE, getTeacherLocaleProfile, parseTeacherLocale, serializeTeacherLocaleCookie, type TeacherLocale, type TeacherLocaleProfile } from "./index";
+import { DEFAULT_TEACHER_LOCALE, TEACHER_LOCALE_COOKIE, getTeacherLocaleProfile, parseTeacherLocale, type TeacherLocale, type TeacherLocaleProfile } from "./index";
 export interface TeacherLocaleContextValue {
   locale: TeacherLocale;
   profile: TeacherLocaleProfile;
@@ -15,9 +15,12 @@ export function TeacherLocaleProvider({ children, initialLocale, syncDocumentLan
   const [locale, updateLocale] = useState(() => parseTeacherLocale(initialLocale));
   const setLocale = useCallback((next: TeacherLocale) => {
     const valid = parseTeacherLocale(next);
-    document.cookie = serializeTeacherLocaleCookie(valid, process.env.NODE_ENV === "production");
     if (syncDocumentLanguage) document.documentElement.lang = valid;
     updateLocale(valid);
+  }, [syncDocumentLanguage]);
+  useEffect(() => {
+    // Migrate away from the former persistent language preference.
+    if (syncDocumentLanguage) document.cookie = `${TEACHER_LOCALE_COOKIE}=; Path=/; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
   }, [syncDocumentLanguage]);
   useEffect(() => { if (syncDocumentLanguage) document.documentElement.lang = locale; }, [locale, syncDocumentLanguage]);
   const value = useMemo(() => ({ locale, profile: getTeacherLocaleProfile(locale), setLocale }), [locale, setLocale]);
